@@ -1,8 +1,8 @@
 use crate::utils::{are_equal, EvaluationResult};
+use winter_utils::{ByteReader, ByteWriter, Deserializable, DeserializationError, Serializable};
 use winterfell::{
     crypto::{Digest, Hasher},
     math::{fields::f23201::BaseElement, FieldElement},
-    ByteReader, ByteWriter, Deserializable, DeserializationError, Serializable,
 };
 
 pub const STATE_WIDTH: usize = 35;
@@ -102,12 +102,18 @@ impl Poseidon23 {
 impl Hasher for Poseidon23 {
     type Digest = Hash;
 
+    const COLLISION_RESISTANCE: u32 = 128;
+
     fn hash(_bytes: &[u8]) -> Self::Digest {
         unimplemented!("not implemented")
     }
 
     fn merge(values: &[Self::Digest; 2]) -> Self::Digest {
         Self::digest(Hash::hashes_as_elements(values))
+    }
+
+    fn merge_many(_values: &[Self::Digest]) -> Self::Digest {
+        unimplemented!("not implemented")
     }
 
     fn merge_with_int(_seed: Self::Digest, _value: u64) -> Self::Digest {
@@ -143,13 +149,18 @@ impl Hash {
 
 impl Digest for Hash {
     fn as_bytes(&self) -> [u8; 32] {
-        unimplemented!()
+        let bytes = BaseElement::elements_as_bytes(&self.0);
+        let mut result = [0; 32];
+        result[..bytes.len()].copy_from_slice(bytes);
+        result
     }
 }
 
 impl Serializable for Hash {
-    fn write_into<W: ByteWriter>(&self, _target: &mut W) {
-        unimplemented!()
+    fn write_into<W: ByteWriter>(&self, target: &mut W) {
+        for i in 0..DIGEST_SIZE{
+             target.write(self.0[i]);
+        }
     }
 }
 

@@ -9,12 +9,15 @@ default = ["std"]
 std = ["hex/std", "winterfell/std"]
 
 [dependencies]
-winterfell = {git = "https://github.com/bwesterb/winterfell", branch = "f23"}
-winter-utils = "0.4.0"
-winter-rand-utils = "0.4.0"
+winterfell = {git = "https://github.com/avecsi/winterfell", branch = "f23"}
+winter-utils = "0.13.1"
+winter-rand-utils = "0.13.1"
 hex = { version = "0.4.3", optional = true }
 log = { version = "0.4", default-features = false }
-blake3 = { version = "1.0", default-features = false }
+blake3 = { version = "1.8.2", default-features = false }
 env_logger = { version = "0.9", default-features = false }
-generic_singleton = "0.4.1"
+generic_singleton = "0.5.1"
 atomic_refcell = "0.1.9"
+
+[patch.crates-io]
+winter-utils = { git = "https://github.com/AVecsi/winterfell", branch = "f23" }

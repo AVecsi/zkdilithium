@@ -1,9 +1,8 @@
-use winter_utils::{collections::Vec, uninit_vector};
+use winter_utils::{uninit_vector};
 use winterfell::{
-    math::{log2, FieldElement, StarkField},
-    EvaluationFrame, Matrix, Trace, TraceInfo, TraceLayout,
+    math::{FieldElement, StarkField}, matrix::ColMatrix, EvaluationFrame, Trace, TraceInfo
 };
-use crate::starkpf::{HASH_CYCLE_LEN, CIND, ZIND, WIND, QWIND};
+use crate::starkpf::{C_TRIT_IND, HASH_CYCLE_LEN, QW_IND, W_IND, Z_IND};
 
 use super::{AUX_WIDTH, PIT_START, PIT_END};
 
@@ -16,9 +15,8 @@ pub const POLYMULTASSERT: usize = GAMMA + 1;
 
 #[derive(Debug)]
 pub struct RapTraceTable<B: StarkField> {
-    layout: TraceLayout,
-    trace: Matrix<B>,
-    meta: Vec<u8>,
+    info: TraceInfo,
+    trace: ColMatrix<B>
 }
 
 impl<B: StarkField> RapTraceTable<B> {
@@ -48,10 +46,10 @@ impl<B: StarkField> RapTraceTable<B> {
             "execution trace length must be a power of 2"
         );
         assert!(
-            log2(length) as u32 <= B::TWO_ADICITY,
+            length.ilog2() as u32 <= B::TWO_ADICITY,
             "execution trace length cannot exceed 2^{} steps, but was 2^{}",
             B::TWO_ADICITY,
-            log2(length)
+            length.ilog2()
         );
         assert!(
             meta.len() <= TraceInfo::MAX_META_LENGTH,
@@ -62,9 +60,8 @@ impl<B: StarkField> RapTraceTable<B> {
 
         let columns = unsafe { (0..width).map(|_| uninit_vector(length)).collect() };
         Self {
-            layout: TraceLayout::new(width, [AUX_WIDTH], [1]),
-            trace: Matrix::new(columns),
-            meta,
+            info: TraceInfo::new_multi_segment(width, AUX_WIDTH, 1, length, meta),
+            trace: ColMatrix::new(columns),
         }
     }
 
@@ -116,16 +113,12 @@ impl<B: StarkField> RapTraceTable<B> {
 impl<B: StarkField> Trace for RapTraceTable<B> {
     type BaseField = B;
 
-    fn layout(&self) -> &TraceLayout {
-        &self.layout
+    fn info(&self) -> &TraceInfo {
+        &self.info
     }
 
     fn length(&self) -> usize {
         self.trace.num_rows()
-    }
-
-    fn meta(&self) -> &[u8] {
-        &self.meta
     }
 
     fn read_main_frame(&self, row_idx: usize, frame: &mut EvaluationFrame<Self::BaseField>) {
@@ -134,71 +127,7 @@ impl<B: StarkField> Trace for RapTraceTable<B> {
         self.trace.read_row_into(next_row_idx, frame.next_mut());
     }
 
-    fn main_segment(&self) -> &Matrix<B> {
+    fn main_segment(&self) -> &ColMatrix<B> {
         &self.trace
-    }
-
-    fn build_aux_segment<E>(
-        &mut self,
-        aux_segments: &[Matrix<E>],
-        rand_elements: &[E],
-    ) -> Option<Matrix<E>>
-    where
-        E: FieldElement<BaseField = Self::BaseField>,
-    {
-        if !aux_segments.is_empty() {
-            return None;
-        }
-
-        let mut current_row = unsafe { uninit_vector(self.width()) };
-        // let mut next_row = unsafe { uninit_vector(self.width()) };
-        self.read_row_into(0, &mut current_row);
-        let mut aux_columns = vec![vec![E::ZERO; self.length()]; self.aux_trace_width()];
-        
-        for i in 0..AUX_WIDTH{
-            aux_columns[i][PIT_START] = E::ZERO;
-        }
-        aux_columns[GAMMA][PIT_START] = E::ONE;
-        
-        let mut gamma1 = E::ONE;
-
-        for step in PIT_START..PIT_END {
-            let matmul_step = step-PIT_START;
-            let matmul_pos = (matmul_step) % HASH_CYCLE_LEN;
-
-            self.read_row_into(step, &mut current_row);
-            
-            if matmul_pos < HASH_CYCLE_LEN - 2{
-                // C eval
-                aux_columns[CAUX][step+1] = aux_columns[CAUX][step] + gamma1*current_row[CIND].into();
-                
-                // Z eval
-                for i in 0..4{
-                    aux_columns[ZAUX+i][step+1] = aux_columns[ZAUX+i][step] + gamma1*current_row[ZIND+i].into();
-                }
-
-                // W eval
-                for i in 0..4{
-                    aux_columns[WAUX+i][step+1] = aux_columns[WAUX+i][step] + gamma1*current_row[WIND+i].into();
-                }
-
-                // QW eval
-                for i in 0..4{
-                    aux_columns[QWAUX+i][step+1] = aux_columns[QWAUX+i][step] + gamma1*current_row[QWIND+i].into();
-                }
-
-                // Maintain a column of powers of gamma1
-                gamma1 *= rand_elements[0];
-                aux_columns[GAMMA][step+1] = gamma1;
-            } else {
-                // Do nothing and simply copy values
-                for i in 0..AUX_WIDTH {
-                    aux_columns[i][step+1] = aux_columns[i][step];
-                }
-            }
-            
-        }
-
-        Some(Matrix::new(aux_columns))
     }
 }

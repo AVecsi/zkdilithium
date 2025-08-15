@@ -17,6 +17,16 @@ pub fn is_binary<E: FieldElement>(a: E) -> E {
     a * a - a
 }
 
+/// Returns zero iff `a` is 0, 1, or -1. Nonzero otherwise.
+pub fn is_ternary_challenge<E: FieldElement>(a: E) -> E {
+    a * (a - E::ONE) * (a + E::ONE)
+}
+
+// Returns zero iff `a` is 0, 1, or 2. Nonzero otherwise.
+pub fn is_ternary<E: FieldElement>(a: E) -> E {
+    a * (a - E::ONE) * (a - E::from(2 as u32))
+}
+
 // TRAIT TO SIMPLIFY CONSTRAINT AGGREGATION
 // ================================================================================================
 

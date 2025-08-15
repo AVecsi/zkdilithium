@@ -1,6 +1,7 @@
 use log::debug;
 use winterfell::math::{fields::f23201::BaseElement, FieldElement};
 use std::io::Write;
+use std::mem;
 use std::time::Instant;
 
 mod starkpf;
@@ -11,11 +12,16 @@ use crate::utils::poseidon_23_spec::{
 
 use crate::starkpf::{prove, verify, verify_with_wrong_inputs, N, K};
 
+fn percentile(sorted: &Vec<u128>, p: f64) -> u128 {
+    let idx = ((p / 100.0) * (sorted.len() - 1) as f64).round() as usize;
+    sorted[idx]
+}
+
 fn main() {
-    env_logger::Builder::new()
-        .format(|buf, record| writeln!(buf, "{}", record.args()))
-        .filter_level(log::LevelFilter::Debug)
-        .init();
+    // env_logger::Builder::new()
+    //     .format(|buf, record| writeln!(buf, "{}", record.args()))
+    //     .filter_level(log::LevelFilter::Debug)
+    //     .init();
 
     let mut z: [[BaseElement; N]; K] = [[BaseElement::ZERO; N]; K];
     let z_u32: [[u32; N];4] = [
@@ -62,41 +68,83 @@ fn main() {
     let com_r_u32: [u32; HASH_DIGEST_WIDTH] = [0; HASH_DIGEST_WIDTH];
     let com_r: [BaseElement; HASH_DIGEST_WIDTH] = com_r_u32.map(BaseElement::new);
 
+    const ITERATIONS: usize = 100;
+
+    let mut gen_times = Vec::with_capacity(ITERATIONS);
+    let mut ver_times = Vec::with_capacity(ITERATIONS);
+    let mut proof_sizes = Vec::with_capacity(ITERATIONS);
+
+    for _ in 0..ITERATIONS {
+        let now = Instant::now();
+        let proof = prove(z, w, qw, ctilde, m, com_r);
+        let gen_time = now.elapsed().as_micros(); // microseconds
+        gen_times.push(gen_time);
+
+        let proof_bytes = proof.to_bytes();
+        proof_sizes.push(proof_bytes.len() as u128);
+
+        let now = Instant::now();
+        verify(proof.clone(), m);
+        let ver_time = now.elapsed().as_micros(); // microseconds
+        ver_times.push(ver_time);
+    }
+
+    // Sort for percentile calculation
+    gen_times.sort_unstable();
+    ver_times.sort_unstable();
+    proof_sizes.sort_unstable();
+
+    println!("Proof generation time (μs): p50={}, p75={}, p90={}, p95={}",
+        percentile(&gen_times, 50.0),
+        percentile(&gen_times, 75.0),
+        percentile(&gen_times, 90.0),
+        percentile(&gen_times, 95.0),
+    );
+
+    println!("Proof verification time (μs): p50={}, p75={}, p90={}, p95={}",
+        percentile(&ver_times, 50.0),
+        percentile(&ver_times, 75.0),
+        percentile(&ver_times, 90.0),
+        percentile(&ver_times, 95.0),
+    );
+
+    println!("Proof size (bytes): p50={}, p75={}, p90={}, p95={}",
+        percentile(&proof_sizes, 50.0),
+        percentile(&proof_sizes, 75.0),
+        percentile(&proof_sizes, 90.0),
+        percentile(&proof_sizes, 95.0),
+    );
+
+
+
     // generate proof
-    let now = Instant::now();
-    let proof = prove(z, w, qw, ctilde, m, com_r);
-    debug!(
-        "---------------------\nProof generated in {} ms",
-        now.elapsed().as_millis()
-    );
+    // let now = Instant::now();
+    // let proof = prove(z, w, qw, ctilde, m, com_r);
+    // debug!(
+    //     "---------------------\nProof generated in {} ms",
+    //     now.elapsed().as_millis()
+    // );
 
-    let proof_bytes = proof.to_bytes();
-    debug!("Proof size: {:.1} KB", proof_bytes.len() as f64 / 1024f64);
-    debug!("Proof security: {} bits", proof.security_level(true));
-    #[cfg(feature = "std")]
-    debug!(
-        "Proof hash: {}",
-        hex::encode(blake3::hash(&proof_bytes).as_bytes())
-    );
+    // let proof_bytes = proof.to_bytes();
+    // debug!("Proof size: {:.1} KB", proof_bytes.len() as f64 / 1024f64);
+    // debug!("Proof security: {} bits", proof.security_level(true));
+    // #[cfg(feature = "std")]
+    // debug!(
+    //     "Proof hash: {}",
+    //     hex::encode(blake3::hash(&proof_bytes).as_bytes())
+    // );
 
-    // verify the proof
-    debug!("---------------------");
-    // let parsed_proof = StarkProof::from_bytes(&proof_bytes).unwrap();
-    // assert_eq!(proof, parsed_proof);
-    let now = Instant::now();
-    match verify(proof.clone(), m) {
-        Ok(_) => debug!(
-            "Proof verified in {:.1} ms",
-            now.elapsed().as_micros() as f64 / 1000f64
-        ),
-        Err(msg) => debug!("Failed to verify proof: {}", msg),
-    }
-    debug!("---------------------");
-    match verify_with_wrong_inputs(proof.clone(), [BaseElement::ZERO;12]) {
-        Ok(_) => debug!(
-            "Proof passed on wrong inputs!"
-        ),
-        Err(msg) => debug!("Failed to verify proof on wrong inputs as expected: {}", msg),
-    }
-    debug!("============================================================");
+    // // verify the proof
+    // debug!("---------------------");
+    // // let parsed_proof = StarkProof::from_bytes(&proof_bytes).unwrap();
+    // // assert_eq!(proof, parsed_proof);
+    // let now = Instant::now();
+    // match verify(proof.clone(), m) {
+    //     Ok(_) => debug!(
+    //         "Proof verified in {:.1} ms",
+    //         now.elapsed().as_micros() as f64 / 1000f64
+    //     ),
+    //     Err(msg) => debug!("Failed to verify proof: {}", msg),
+    // }
+    // debug!("============================================================");
 }
