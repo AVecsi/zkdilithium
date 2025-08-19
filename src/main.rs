@@ -5,12 +5,32 @@ use std::mem;
 use std::time::Instant;
 
 mod starkpf;
+mod multishowpf;
+mod disclosurepf;
 mod utils;
 use crate::utils::poseidon_23_spec::{
-    DIGEST_SIZE as HASH_DIGEST_WIDTH,
+    DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH,
 };
 
-use crate::starkpf::{prove, verify, verify_with_wrong_inputs, N, K};
+use crate::starkpf::{
+    prove as stark_prove,
+    verify as stark_verify,
+    verify_with_wrong_inputs as stark_verify_wrong,
+    N,
+    K,
+};
+
+use crate::multishowpf::{
+    prove as multi_prove,
+    verify as multi_verify,
+    verify_with_wrong_inputs as multi_verify_wrong,
+};
+
+use crate::disclosurepf::{
+    prove as disclosure_prove,
+    verify as disclosure_verify,
+    verify_with_wrong_inputs as disclosure_verify_wrong,
+};
 
 fn percentile(sorted: &Vec<u128>, p: f64) -> u128 {
     let idx = ((p / 100.0) * (sorted.len() - 1) as f64).round() as usize;
@@ -65,86 +85,138 @@ fn main() {
     let m_u32: [u32; 12] = [26331, 30185, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     let m: [BaseElement; HASH_DIGEST_WIDTH] = m_u32.map(BaseElement::new);
 
-    let com_r_u32: [u32; HASH_DIGEST_WIDTH] = [0; HASH_DIGEST_WIDTH];
+    let com_r_u32: [u32; HASH_DIGEST_WIDTH] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ];
     let com_r: [BaseElement; HASH_DIGEST_WIDTH] = com_r_u32.map(BaseElement::new);
 
-    const ITERATIONS: usize = 100;
+    let nonce_u32: [u32; HASH_DIGEST_WIDTH] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ];
+    let nonce: [BaseElement; HASH_DIGEST_WIDTH] = nonce_u32.map(BaseElement::new);
 
-    let mut gen_times = Vec::with_capacity(ITERATIONS);
-    let mut ver_times = Vec::with_capacity(ITERATIONS);
-    let mut proof_sizes = Vec::with_capacity(ITERATIONS);
-
-    for _ in 0..ITERATIONS {
-        let now = Instant::now();
-        let proof = prove(z, w, qw, ctilde, m, com_r);
-        let gen_time = now.elapsed().as_micros(); // microseconds
-        gen_times.push(gen_time);
-
-        let proof_bytes = proof.to_bytes();
-        proof_sizes.push(proof_bytes.len() as u128);
-
-        let now = Instant::now();
-        verify(proof.clone(), m);
-        let ver_time = now.elapsed().as_micros(); // microseconds
-        ver_times.push(ver_time);
-    }
-
-    // Sort for percentile calculation
-    gen_times.sort_unstable();
-    ver_times.sort_unstable();
-    proof_sizes.sort_unstable();
-
-    println!("Proof generation time (μs): p50={}, p75={}, p90={}, p95={}",
-        percentile(&gen_times, 50.0),
-        percentile(&gen_times, 75.0),
-        percentile(&gen_times, 90.0),
-        percentile(&gen_times, 95.0),
-    );
-
-    println!("Proof verification time (μs): p50={}, p75={}, p90={}, p95={}",
-        percentile(&ver_times, 50.0),
-        percentile(&ver_times, 75.0),
-        percentile(&ver_times, 90.0),
-        percentile(&ver_times, 95.0),
-    );
-
-    println!("Proof size (bytes): p50={}, p75={}, p90={}, p95={}",
-        percentile(&proof_sizes, 50.0),
-        percentile(&proof_sizes, 75.0),
-        percentile(&proof_sizes, 90.0),
-        percentile(&proof_sizes, 95.0),
-    );
+    let comm_u32: [u32; RATE_WIDTH] = [5428787, 1148244, 535908, 7205632, 5701352, 6817121, 2538742, 4014714, 4875333, 4023951, 5049287, 121171, 4841161, 4298834, 1359355, 827887, 215546, 6458349, 3565975, 2687468, 5955443, 3364384, 2522002, 2072700];
+    let comm: [BaseElement; RATE_WIDTH] = comm_u32.map(BaseElement::new);
 
 
+    // const ITERATIONS: usize = 10;
 
-    // generate proof
-    // let now = Instant::now();
-    // let proof = prove(z, w, qw, ctilde, m, com_r);
-    // debug!(
-    //     "---------------------\nProof generated in {} ms",
-    //     now.elapsed().as_millis()
-    // );
+    // let mut gen_times = Vec::with_capacity(ITERATIONS);
+    // let mut ver_times = Vec::with_capacity(ITERATIONS);
+    // let mut proof_sizes = Vec::with_capacity(ITERATIONS);
 
-    // let proof_bytes = proof.to_bytes();
-    // debug!("Proof size: {:.1} KB", proof_bytes.len() as f64 / 1024f64);
-    // debug!("Proof security: {} bits", proof.security_level(true));
-    // #[cfg(feature = "std")]
-    // debug!(
-    //     "Proof hash: {}",
-    //     hex::encode(blake3::hash(&proof_bytes).as_bytes())
-    // );
+    // for _ in 0..ITERATIONS {
+    //     let now = Instant::now();
+    //     let proof = prove(z, w, qw, ctilde, m, comm, com_r, nonce);
+    //     let gen_time = now.elapsed().as_micros(); // microseconds
+    //     gen_times.push(gen_time);
 
-    // // verify the proof
-    // debug!("---------------------");
-    // // let parsed_proof = StarkProof::from_bytes(&proof_bytes).unwrap();
-    // // assert_eq!(proof, parsed_proof);
-    // let now = Instant::now();
-    // match verify(proof.clone(), m) {
-    //     Ok(_) => debug!(
-    //         "Proof verified in {:.1} ms",
-    //         now.elapsed().as_micros() as f64 / 1000f64
-    //     ),
-    //     Err(msg) => debug!("Failed to verify proof: {}", msg),
+    //     let proof_bytes = proof.to_bytes();
+    //     proof_sizes.push(proof_bytes.len() as u128);
+
+    //     let now = Instant::now();
+    //     verify(proof.clone(), comm, nonce);
+    //     let ver_time = now.elapsed().as_micros(); // microseconds
+    //     ver_times.push(ver_time);
     // }
-    // debug!("============================================================");
+
+    // // Sort for percentile calculation
+    // gen_times.sort_unstable();
+    // ver_times.sort_unstable();
+    // proof_sizes.sort_unstable();
+
+    // println!("Proof generation time (μs): p50={}, p75={}, p90={}, p95={}",
+    //     percentile(&gen_times, 50.0),
+    //     percentile(&gen_times, 75.0),
+    //     percentile(&gen_times, 90.0),
+    //     percentile(&gen_times, 95.0),
+    // );
+
+    // println!("Proof verification time (μs): p50={}, p75={}, p90={}, p95={}",
+    //     percentile(&ver_times, 50.0),
+    //     percentile(&ver_times, 75.0),
+    //     percentile(&ver_times, 90.0),
+    //     percentile(&ver_times, 95.0),
+    // );
+
+    // println!("Proof size (bytes): p50={}, p75={}, p90={}, p95={}",
+    //     percentile(&proof_sizes, 50.0),
+    //     percentile(&proof_sizes, 75.0),
+    //     percentile(&proof_sizes, 90.0),
+    //     percentile(&proof_sizes, 95.0),
+    // );
+
+    //generate original proof
+    print!("ORIGINAL PROOF\n");
+    let now = Instant::now();
+    let proof = stark_prove(z, w, qw, ctilde, m, com_r);
+    print!(
+        "---------------------\nProof generated in {} ms\n",
+        now.elapsed().as_millis()
+    );
+
+    let proof_bytes = proof.to_bytes();
+    print!("Proof size: {:.1} KB\n", proof_bytes.len() as f64 / 1024f64);
+    //debug!("Proof security: {} bits", proof.security_level(true));
+    #[cfg(feature = "std")]
+    print!(
+        "Proof hash: {}\n",
+        hex::encode(blake3::hash(&proof_bytes).as_bytes())
+    );
+
+    // verify the proof
+    print!("---------------------\n");
+    // let parsed_proof = StarkProof::from_bytes(&proof_bytes).unwrap();
+    // assert_eq!(proof, parsed_proof);
+    let now = Instant::now();
+    match  stark_verify(proof.clone(), m) {
+        Ok(_) => print!(
+            "Proof verified in {:.1} ms\n",
+            now.elapsed().as_micros() as f64 / 1000f64
+        ),
+        Err(msg) => print!("Failed to verify proof: {}\n", msg),
+    }
+    print!("============================================================\n");
+    match stark_verify_wrong(proof.clone(), [BaseElement::ZERO;12]) {
+        Ok(_) => print!(
+            "Proof passed on wrong inputs!\n"
+        ),
+        Err(msg) => print!("Failed to verify proof on wrong inputs as expected: {}\n", msg),
+    }
+    print!("============================================================\n");
+
+    //generate multishow proof
+    print!("MULTI-SHOW PROOF\n");
+    let now = Instant::now();
+    let proof = multi_prove(z, w, qw, ctilde, m, comm, com_r, nonce);
+    print!(
+        "---------------------\nMulti-show proof generated in {} ms\n",
+        now.elapsed().as_millis()
+    );
+
+    let proof_bytes = proof.to_bytes();
+    print!("Multi-show proof size: {:.1} KB\n", proof_bytes.len() as f64 / 1024f64);
+    //debug!("Proof security: {} bits", proof.security_level(true));
+    #[cfg(feature = "std")]
+    print!(
+        "Multi-show proof hash: {}\n",
+        hex::encode(blake3::hash(&proof_bytes).as_bytes())
+    );
+
+    // verify the proof
+    print!("---------------------\n");
+    // let parsed_proof = StarkProof::from_bytes(&proof_bytes).unwrap();
+    // assert_eq!(proof, parsed_proof);
+    let now = Instant::now();
+    match  multi_verify(proof.clone(), comm, nonce) {
+        Ok(_) => print!(
+            "Multi-show proof verified in {:.1} ms\n",
+            now.elapsed().as_micros() as f64 / 1000f64
+        ),
+        Err(msg) => print!("Failed to verify multi-show proof: {}\n", msg),
+    }
+    print!("============================================================\n");
+    match multi_verify_wrong(proof.clone(), comm, [BaseElement::ZERO;12]) {
+        Ok(_) => print!(
+            "Proof passed on wrong inputs!\n"
+        ),
+        Err(msg) => print!("Failed to verify multi-show proof on wrong inputs as expected: {}\n", msg),
+    }
+    print!("============================================================\n");
 }
