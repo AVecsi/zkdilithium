@@ -6,9 +6,10 @@ use std::time::Instant;
 
 mod starkpf;
 mod multishowpf;
+mod disclosurepf;
 mod utils;
 use crate::utils::poseidon_23_spec::{
-    DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH,
+    DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH as HASH_RATE_WIDTH,
 };
 
 use crate::starkpf::{
@@ -25,6 +26,11 @@ use crate::multishowpf::{
     verify_with_wrong_inputs as multi_verify_wrong,
 };
 
+use crate::disclosurepf::{
+    prove as discl_prove,
+    verify as discl_verify,
+    verify_with_wrong_inputs as discl_verify_wrong,
+};
 
 fn percentile(sorted: &Vec<u128>, p: f64) -> u128 {
     let idx = ((p / 100.0) * (sorted.len() - 1) as f64).round() as usize;
@@ -85,8 +91,8 @@ fn main() {
     let nonce_u32: [u32; HASH_DIGEST_WIDTH] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ];
     let nonce: [BaseElement; HASH_DIGEST_WIDTH] = nonce_u32.map(BaseElement::new);
 
-    let comm_u32: [u32; RATE_WIDTH] = [5428787, 1148244, 535908, 7205632, 5701352, 6817121, 2538742, 4014714, 4875333, 4023951, 5049287, 121171, 4841161, 4298834, 1359355, 827887, 215546, 6458349, 3565975, 2687468, 5955443, 3364384, 2522002, 2072700];
-    let comm: [BaseElement; RATE_WIDTH] = comm_u32.map(BaseElement::new);
+    let comm_u32: [u32; HASH_RATE_WIDTH] = [5428787, 1148244, 535908, 7205632, 5701352, 6817121, 2538742, 4014714, 4875333, 4023951, 5049287, 121171, 4841161, 4298834, 1359355, 827887, 215546, 6458349, 3565975, 2687468, 5955443, 3364384, 2522002, 2072700];
+    let comm: [BaseElement; HASH_RATE_WIDTH] = comm_u32.map(BaseElement::new);
 
 
     // const ITERATIONS: usize = 10;
@@ -213,4 +219,79 @@ fn main() {
         Err(msg) => print!("Failed to verify multi-show proof on wrong inputs as expected: {}\n", msg),
     }
     print!("============================================================\n");
+
+
+    let example_attrs_u32: [[u32; HASH_DIGEST_WIDTH]; 16] = [[6709091, 6169249, 5628887, 4660270, 6942066, 760301, 7289375, 4651720, 3272026, 5191140, 1168225, 3249879, ],
+        [1883096, 3334600, 2419478, 625713, 1304525, 7321007, 200660, 3654382, 6947786, 1446773, 4142099, 1534900, ],
+        [2166230, 6046054, 1729067, 6806663, 6712661, 5211053, 1800327, 1965301, 2578585, 2595240, 1941328, 1688092, ],
+        [1903665, 2302439, 3742632, 4673238, 3702981, 7267099, 2703170, 3795636, 2560825, 1463000, 5038689, 6962979, ],
+        [5261978, 6376561, 6334061, 2439191, 4256727, 3431320, 838223, 2156492, 5566949, 196716, 6772525, 4086382, ],
+        [6267255, 3287990, 2730841, 2580225, 5577307, 2023051, 3124779, 1260312, 2238516, 5480509, 2169133, 3875935, ],
+        [5294687, 5349395, 6077507, 4161172, 4821248, 6288095, 1239158, 4408471, 2498506, 2545645, 3580392, 2523776, ],
+        [4292661, 7186432, 4005510, 4596007, 5426302, 3519061, 5015946, 6889555, 4572833, 1879075, 5963844, 4018330, ],
+        [1051056, 6625906, 166797, 3038796, 3963215, 4267920, 5928947, 6951298, 5207067, 5553312, 1279897, 809137, ],
+        [4517713, 1282452, 4932912, 1490070, 6225174, 4647588, 6199104, 5096281, 1913974, 7223470, 2067186, 2771324, ],
+        [700963, 5152205, 6154482, 636882, 5538262, 255152, 5950538, 2076935, 3885714, 4054122, 4678293, 815884, ],
+        [3629804, 652587, 6512855, 6885016, 1883773, 3445290, 2408204, 5827794, 1801908, 4653391, 3839995, 4436, ],
+        [951587, 3526714, 5912568, 6016870, 341122, 4238883, 1468158, 6578567, 341610, 2634026, 4100685, 4788968, ],
+        [3289041, 6717852, 3156578, 3050773, 6237040, 4122505, 2793174, 1852424, 4610830, 1391938, 1160802, 2370928, ],
+        [7261957, 638429, 2489791, 5588808, 810406, 6004723, 6270530, 6802187, 3130153, 5044087, 3946977, 1239117, ],
+        [5767991, 4585105, 5129167, 4965230, 6506881, 752062, 3433833, 4379951, 2053525, 5917503, 2188161, 3154167, ]];
+
+        let mut example_attrs: [[BaseElement; HASH_DIGEST_WIDTH]; 16] = [[Default::default(); 12]; 16];
+        
+        for i in 0..16 {
+            example_attrs[i] = example_attrs_u32[i].map(BaseElement::new);
+        }
+
+        let discl_comm_u32: [u32; HASH_RATE_WIDTH] = [434031, 793865, 2790115, 2641619, 3779823, 4687400, 5043245, 2179103, 1525361, 1548302, 5061098, 3487740, 7282711, 3416983, 2970685, 1683956, 5938759, 7331637, 4939426, 3516863, 378218, 3627887, 131057, 1048311, ];
+        let discl_comm: [BaseElement; HASH_RATE_WIDTH] = discl_comm_u32.map(BaseElement::new);
+
+        let secret_comm_u32: [u32; HASH_RATE_WIDTH] = [3598049, 5948367, 495133, 3537745, 3028752, 4899071, 6361326, 269242, 4399013, 7200862, 4385127, 7111978, 5085508, 1316843, 4254913, 1067592, 4286291, 1568535, 4877137, 1795638, 969826, 4536722, 5895964, 833797, ];
+        let secret_comm: [BaseElement; HASH_RATE_WIDTH] = secret_comm_u32.map(BaseElement::new);
+
+        let nonce0: [BaseElement; HASH_DIGEST_WIDTH] = [BaseElement::ONE; HASH_DIGEST_WIDTH];
+        let wrong_nonce0: [BaseElement; HASH_DIGEST_WIDTH] = [BaseElement::ZERO; HASH_DIGEST_WIDTH];
+
+        let cert_list: Vec<Vec<[BaseElement; HASH_DIGEST_WIDTH]>> = vec![example_attrs.to_vec()/*  , example_attrs.to_vec(), example_attrs.to_vec()  */];
+        let discl_comms = vec![discl_comm/*  , discl_comm, discl_comm  */];
+        let nonces = vec![nonce0.clone()/*  , nonce0.clone(), nonce0.clone() */];
+        let num_of_attributes = vec![16/*  , 16, 16 */];
+
+        let disclosed_indices: Vec<Vec<usize>> = [[3,4,5].to_vec()/*  , [3,4,5].to_vec(), [3,4,5].to_vec() */].to_vec();
+
+        let mut disclosed_attributes: Vec<Vec<[BaseElement; HASH_DIGEST_WIDTH]>> = Vec::new();
+        for i in 0..disclosed_indices.len() {
+            disclosed_attributes.push(Vec::new());
+            for j in 0..disclosed_indices[i].len() {
+                disclosed_attributes[i].push(cert_list[i][disclosed_indices[i][j]]);
+            }
+        }
+
+        print!("DISCLOSURE PROOF\n");
+        let mut start = Instant::now();
+
+        let proof = discl_prove(cert_list.clone(), disclosed_indices.clone(), discl_comms.clone(), secret_comm, nonces.clone(), nonce0);
+        println!("proof len {}", proof.to_bytes().len());
+        println!("{:?}", start.elapsed());
+        let proof_bytes = proof.to_bytes();
+        println!("Proof size: {:.1} KB", proof_bytes.len() as f64 / 1024f64);
+        //println!("Proof security: {} bits", proof.security_level(true));
+        start = Instant::now();
+        match discl_verify(proof.clone(), disclosed_attributes.clone(), disclosed_indices.clone(), num_of_attributes.clone(), discl_comms.clone(), secret_comm, nonces.clone(), nonce0) {
+            Ok(_) => {
+                println!("Verified.");
+            },
+            Err(msg) => 
+            {
+                println!("Failed to verify proof: {}", msg);
+            }
+        }
+        println!("{:?}", start.elapsed());
+        match discl_verify_wrong(proof.clone(), disclosed_attributes.clone(), disclosed_indices.clone(), num_of_attributes.clone(), discl_comms.clone(), secret_comm, nonces.clone(), wrong_nonce0) {
+        Ok(_) => print!(
+            "Proof passed on wrong inputs!\n"
+        ),
+        Err(msg) => print!("Failed to verify multi-show proof on wrong inputs as expected: {}\n", msg),
+    }
 }
