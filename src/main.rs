@@ -6,7 +6,6 @@ use std::time::Instant;
 
 mod starkpf;
 mod multishowpf;
-mod disclosurepf;
 mod utils;
 use crate::utils::poseidon_23_spec::{
     DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH,
