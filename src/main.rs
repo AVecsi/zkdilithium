@@ -25,11 +25,6 @@ use crate::multishowpf::{
     verify_with_wrong_inputs as multi_verify_wrong,
 };
 
-use crate::disclosurepf::{
-    prove as disclosure_prove,
-    verify as disclosure_verify,
-    verify_with_wrong_inputs as disclosure_verify_wrong,
-};
 
 fn percentile(sorted: &Vec<u128>, p: f64) -> u128 {
     let idx = ((p / 100.0) * (sorted.len() - 1) as f64).round() as usize;
