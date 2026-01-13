@@ -45,8 +45,7 @@ impl Air for ThinDilAir {
     // --------------------------------------------------------------------------------------------
     fn new(trace_info: TraceInfo, pub_inputs: Self::PublicInputs, options: ProofOptions) -> Self {
         let mut main_degrees = Vec::new();
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); (N-TAU-1)/FE_TRIT_SIZE]); // c
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); C_SIZE-(N-TAU-1)/FE_TRIT_SIZE]); // c
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); C_SIZE]); // c
 
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); HASH_CYCLE_LEN]); //Q_IND, Z_IND, Z_RANGE_IND 
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); HASH_CYCLE_LEN]); //R_IND, Z_RANGE_IND
@@ -67,8 +66,8 @@ impl Air for ThinDilAir {
 
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); 6*HASH_STATE_WIDTH]); //hash_space
 
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(4, vec![PADDED_TRACE_LENGTH]); 1]); //SWAP_ASSERT
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(4, vec![PADDED_TRACE_LENGTH]); 1]); //SET_ASSERT
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); 1]); //SWAP_ASSERT
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); 1]); //SET_ASSERT
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 1]); //C_TRIT_ASSERT
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 2*4]); //W_DEC_ASSERT
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); 4]); //W_LOW_ASSERT
@@ -229,8 +228,8 @@ impl Air for ThinDilAir {
         for i in 0..C_SIZE {
             result.agg_constraint(
                 C_IND+i, 
-                qrdec_flag, 
-                (E::ONE - next[SWAP_DEC_FE_IND+i])*(E::ONE - s_fe[i])*(next[C_IND+i] - current[C_IND+i])
+                (qrdec_flag - s_fe[i]), 
+                (E::ONE - next[SWAP_DEC_FE_IND+i])*(next[C_IND+i] - current[C_IND+i])
             );
         }
 
@@ -260,7 +259,7 @@ impl Air for ThinDilAir {
 
         rhs = rhs - set_change;
 
-        result.agg_constraint(SWAP_ASSERT, qrdec_flag, lhs - rhs);
+        result[SWAP_ASSERT] +=  lhs - rhs;
 
         //The new trit must be set correctly
         lhs = E::ZERO;
@@ -276,7 +275,7 @@ impl Air for ThinDilAir {
             rhs += next[SWAP_C_TRIT + i] * (E::ONE - next[SWAP_DEC_TRIT_IND + i]) * powers_of_2[i*2]; //The old value minus the swapped trit
         }
 
-        result.agg_constraint(SET_ASSERT, qrdec_flag, lhs-rhs-addition-swap_change);
+        result[SET_ASSERT] +=  qrdec_flag*(lhs-rhs-addition)-swap_change;
 
         // Q BIT DECOMPOSITION
         let (head, tail) = result.split_at_mut(Q_ASSERT);

@@ -4,6 +4,7 @@
 // LICENSE file in the root directory of this source tree.
 
 use log::debug;
+use rand_chacha::{ChaCha20Rng, rand_core::SeedableRng};
 use std::{time::Instant};
 use winterfell::{
     crypto::{DefaultRandomCoin, MerkleTree}, math::{fields::f23201::BaseElement, FieldElement, StarkField}, FieldExtension, Proof, ProofOptions, Prover, Trace, VerifierError
@@ -174,7 +175,8 @@ pub(crate) fn prove(
             8,   // FRI folding factor
             127, // FRI max remainder length
             winterfell::BatchingMethod::Linear, //TODO
-            winterfell::BatchingMethod::Linear //TODO
+            winterfell::BatchingMethod::Linear, //TODO
+            true,
         );
         debug!(
             "Generating proof for correctness of Merkle tree"
@@ -197,7 +199,8 @@ pub(crate) fn prove(
         );
 
         // generate the proof
-        prover.prove(trace).unwrap()
+        let seed = ChaCha20Rng::from_entropy().get_seed();
+        prover.prove(trace, Some(seed)).unwrap()
     }
 
     pub fn verify(proof: Proof, m: [BaseElement; HASH_DIGEST_WIDTH]) -> Result<(), VerifierError> {

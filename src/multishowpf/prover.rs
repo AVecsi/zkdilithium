@@ -5,9 +5,10 @@
 
 use std::os::macos::raw::stat;
 
+use rand_chacha::ChaCha20Rng;
 use winter_utils::uninit_vector;
 use winterfell::{
-    crypto::{hashers::Blake3_256, DefaultRandomCoin, MerkleTree}, matrix::ColMatrix, AuxRandElements, CompositionPoly, CompositionPolyTrace, ConstraintCompositionCoefficients, DefaultConstraintCommitment, DefaultConstraintEvaluator, DefaultTraceLde, PartitionOptions, StarkDomain, Trace, TraceInfo, TracePolyTable, TraceTable
+    AuxRandElements, CompositionPoly, CompositionPolyTrace, ConstraintCompositionCoefficients, DefaultConstraintCommitment, DefaultConstraintEvaluator, DefaultTraceLde, PartitionOptions, StarkDomain, Trace, TraceInfo, TracePolyTable, TraceTable, ZkParameters, crypto::{DefaultRandomCoin, MerkleTree, hashers::Blake3_256}, matrix::ColMatrix
 };
 
 use crate::{multishowpf::{aux_trace_table::{RapTraceTable, CAUX, GAMMA, QWAUX, WAUX, ZAUX}, AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_IND, C_IND, C_SIZE, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, HTR, K, M, M_IND, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, QW_IND, Q_IND, Q_RANGE, Q_RANGE_IND, R_IND, R_RANGE, R_RANGE_IND, SIGN_IND, SWAP_C_TRIT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, S_BALL_START, TAU, W_BIND, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND, _TRACE_LENGTH}, utils::poseidon_23_spec};
@@ -338,6 +339,7 @@ impl Prover for ThinDilMulShowProver {
     type BaseField = BaseElement;
     type Air = ThinDilMulShowAir;
     type Trace = RapTraceTable<BaseElement>;
+    type ZkPrng = ChaCha20Rng;
 
    fn get_pub_inputs(&self, _trace: &Self::Trace) -> PublicInputs {
        PublicInputs{comm: self.comm, nonce: self.nonce}
@@ -359,7 +361,7 @@ impl Prover for ThinDilMulShowProver {
         DefaultConstraintEvaluator<'a, Self::Air, E>;
     
     type ConstraintCommitment<E: FieldElement<BaseField = Self::BaseField>> =
-        DefaultConstraintCommitment<E, Blake3_256<BaseElement>, Self::VC>;
+        DefaultConstraintCommitment<E, Blake3_256<BaseElement>, Self::ZkPrng, Self::VC>;
     
     fn new_trace_lde<E: FieldElement<BaseField = Self::BaseField>>(
         &self,
@@ -367,8 +369,10 @@ impl Prover for ThinDilMulShowProver {
         main_trace: &ColMatrix<Self::BaseField>,
         domain: &StarkDomain<Self::BaseField>,
         partition_option: PartitionOptions,
+        zk_parameters: Option<ZkParameters>,
+        prng: &mut Option<Self::ZkPrng>,
     ) -> (Self::TraceLde<E>, TracePolyTable<E>) {
-        DefaultTraceLde::new(trace_info, main_trace, domain, partition_option)
+        DefaultTraceLde::new(trace_info, main_trace, domain, partition_option, zk_parameters, prng)
     }
     
     fn new_evaluator<'a, E: FieldElement<BaseField = Self::BaseField>>(
@@ -386,12 +390,16 @@ impl Prover for ThinDilMulShowProver {
         num_constraint_composition_columns: usize,
         domain: &StarkDomain<Self::BaseField>,
         partition_options: PartitionOptions,
+        zk_parameters: Option<ZkParameters>,
+        prng: &mut Option<Self::ZkPrng>,
     ) -> (Self::ConstraintCommitment<E>, CompositionPoly<E>) {
         DefaultConstraintCommitment::new(
             composition_poly_trace,
             num_constraint_composition_columns,
             domain,
             partition_options,
+            zk_parameters,
+            prng,
         )
     }
 
