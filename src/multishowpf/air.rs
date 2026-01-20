@@ -863,7 +863,7 @@ fn get_swap_fe_constants() -> Vec<Vec<BaseElement>> {
     for _ in 0..C_SIZE {
         swap_fe_const.push(vec![BaseElement::ZERO; PADDED_TRACE_LENGTH]);
     }
-    for i in S_BALL_START + HASH_CYCLE_LEN-1..(S_BALL_END)*HASH_CYCLE_LEN{
+    for i in S_BALL_START + HASH_CYCLE_LEN-1..(S_BALL_END)*HASH_CYCLE_LEN-1{
         //N - TAU + i - HASH_CYCLE_LEN is the trit index
         swap_fe_const[(N - TAU + i - HASH_CYCLE_LEN - S_BALL_START) / FE_TRIT_SIZE][i] = BaseElement::ONE;
     }
@@ -877,7 +877,7 @@ fn get_swap_trit_constants() -> Vec<Vec<BaseElement>> {
     for _ in 0..FE_TRIT_SIZE {
         swap_trit_const.push(vec![BaseElement::ZERO; PADDED_TRACE_LENGTH]);
     }
-    for i in S_BALL_START + HASH_CYCLE_LEN-1..(S_BALL_END)*HASH_CYCLE_LEN{
+    for i in S_BALL_START + HASH_CYCLE_LEN-1..(S_BALL_END)*HASH_CYCLE_LEN-1{
         swap_trit_const[(N - TAU + i - HASH_CYCLE_LEN - S_BALL_START) % FE_TRIT_SIZE][i] = BaseElement::ONE;
     }
 

@@ -54,7 +54,7 @@ pub(crate) fn prove(
             127, // FRI max remainder length
             winterfell::BatchingMethod::Linear, //TODO
             winterfell::BatchingMethod::Linear, //TODO
-            false
+            true
         );
         debug!(
             "Generating proof for correctness of Disclosure tree"
