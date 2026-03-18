@@ -1,23 +1,44 @@
-# zkdilithium ♦️: Post-Quantum Anonymous Credentials [ePrint:2023/414](https://eprint.iacr.org/2023/414)
+# Post-Quantum Digital Identity
 
-Rust implementation of the zkDilithium based anonymous credential scheme introduced in [ePrint:2023/414](https://eprint.iacr.org/2023/414)/
+A Rust implementation of an optimized [zkDilithium](https://eprint.iacr.org/2023/414) based anonymous credential scheme with extensions to support multi-show unlinkability and selective disclosure.
 
-**WARNING:** This is an academic proof-of-concept prototype, and in particular has not received careful code review. This implementation is NOT ready for production use.
-
-## Dependencies
-This project uses the [winterfell](https://github.com/facebook/winterfell/) crate as the backend for the STARK prover. We have a [fork](https://github.com/bwesterb/winterfell/) of this crate which contains the zkDilithium fields/extensions.
-
-The [zkDilithium python spec](spec/zkdilithium.py) requires python 3.9 or below due to its dependence on the [Galois](https://github.com/mhostetter/galois) package.
+> **⚠️ WARNING:** This is an academic proof-of-concept prototype and has not received careful code review. This implementation is **NOT ready for production use**.
 
 ## Overview
-* [`spec/zkdilithium.py`](spec/zkdilithium.py): Python specification for the zkDilithium signature scheme. Can be run to generate a [testcase](spec/log/testcase.txt) that is plugged into the STARK prover.
-* [`src/utils`](src/utils): Contains an implementation of the Poseidon hash function over the zkDilithium field and corresponding constraints.
-* [`src/starkpf`](src/starkpf/): Contains the STARK prover which proves knowledge of a zkDilithium signature on a publicly known message m.
 
-Run with 
+This library implements a post-quantum anonymous credential scheme based on zkDilithium signatures and STARK proofs. It supports:
+
+- **Anonymous credentials** — prove possession of a valid credential without revealing the underlying signature
+- **Multi-show unlinkability** — repeated presentations of the same credential cannot be linked to one another
+- **Selective disclosure** — reveal only chosen attributes from a credential while keeping others hidden
+- **Hidden attributes** — credentials can include attributes that are hidden from the issuer
+
+## Dependencies
+
+This project uses the [winterfell](https://github.com/facebook/winterfell/) crate as the STARK prover backend. zkDilithium requires custom fields and extensions not present in upstream, and while a [prior fork](https://github.com/bwesterb/winterfell) added some of these, it lacked zero-knowledge proof support and had fallen out of date. Our [fork](https://github.com/avecsi/winterfell/) builds on this work and adds the necessary zkDilithium fields, field extensions, and ZK support.
+
+## Getting Started
+
+**Prerequisites:** Rust and Cargo (stable toolchain recommended).
+
+Clone the repository and build in release mode:
+
 ```bash
 cargo run --release
 ```
 
+## Module Structure
+
+- [`src/utils`](src/utils) — Poseidon hash function implemented over the zkDilithium field, along with the corresponding constraints.
+- [`src/starkpf`](src/starkpf/) — STARK prover that proves knowledge of a zkDilithium signature on a publicly known message `m`.
+- [`src/multishowpf`](src/multishowpf/) — STARK prover that proves knowledge of a zkDilithium signature on a secret message `m` by publishing `H(m || salt)`, enabling unlinkability.
+- [`src/disclosurepf2`](src/disclosurepf2/) — STARK prover that proves knowledge of a credential containing the disclosed attributes and contributing to `H(m || salt)`, enabling selective disclosure.
+
+## References
+
+- Guru-Vamsi Policharla, Bas Westerbaan, Armando Faz-Hernández, & Christopher A Wood. (2023). Post-Quantum Privacy Pass via Post-Quantum Anonymous Credentials. [https://eprint.iacr.org/2023/414](https://eprint.iacr.org/2023/414)
+- [winterfell](https://github.com/facebook/winterfell/) — STARK proof system by Facebook
+
 ## License
-This library is released under the MIT License.
+
+This library is released under the [MIT License](LICENSE).
