@@ -176,7 +176,7 @@ pub(crate) fn prove(
             127, // FRI max remainder length
             winterfell::BatchingMethod::Linear, //TODO
             winterfell::BatchingMethod::Linear, //TODO
-            true,
+            false,
         );
         debug!(
             "Generating proof for correctness of Merkle tree"
@@ -191,7 +191,7 @@ pub(crate) fn prove(
 
         let trace_width = trace.width();
         let trace_length = trace.length();
-        debug!(
+        println!(
             "Generated execution trace of {} registers and 2^{} steps in {} ms \n",
             trace_width,
             trace_length.ilog2(),

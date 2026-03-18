@@ -243,7 +243,7 @@ impl Air for ThinDilMulShowAir {
         for i in 0..C_SIZE {
             result.agg_constraint(
                 C_IND+i, 
-                (qrdec_flag - s_fe[i]), 
+                qrdec_flag - s_fe[i], 
                 (E::ONE - next[SWAP_DEC_FE_IND+i])*(next[C_IND+i] - current[C_IND+i])
             );
         }
@@ -280,17 +280,16 @@ impl Air for ThinDilMulShowAir {
         lhs = E::ZERO;
         rhs = E::ZERO;
 
-        let mut swap_change = E::ZERO;
         for i in 0..C_SIZE{
             lhs += next[SWAP_DEC_FE_IND + i] * next[C_IND + i]; //The new value of the modified FE
         }
-        swap_change = next[SWAP_FE_EQUAL_IND] * swap_value;
+        let swap_change = next[SWAP_FE_EQUAL_IND] * swap_value;
 
         for i in 0..FE_TRIT_SIZE {
             rhs += next[SWAP_C_TRIT + i] * (E::ONE - next[SWAP_DEC_TRIT_IND + i]) * powers_of_2[i*2]; //The old value minus the swapped trit
         }
 
-        result[SET_ASSERT] +=  qrdec_flag*(lhs-rhs-addition)-swap_change;
+        result[SET_ASSERT] +=  qrdec_flag * (lhs - rhs - addition) - swap_change;
 
         // Q BIT DECOMPOSITION
         let (head, tail) = result.split_at_mut(Q_ASSERT);

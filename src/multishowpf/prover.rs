@@ -1,17 +1,11 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
-//
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
-
-use std::os::macos::raw::stat;
 
 use rand_chacha::ChaCha20Rng;
 use winter_utils::uninit_vector;
 use winterfell::{
-    AuxRandElements, CompositionPoly, CompositionPolyTrace, ConstraintCompositionCoefficients, DefaultConstraintCommitment, DefaultConstraintEvaluator, DefaultTraceLde, PartitionOptions, StarkDomain, Trace, TraceInfo, TracePolyTable, TraceTable, ZkParameters, crypto::{DefaultRandomCoin, MerkleTree, hashers::Blake3_256}, matrix::ColMatrix
+    AuxRandElements, CompositionPoly, CompositionPolyTrace, ConstraintCompositionCoefficients, DefaultConstraintCommitment, DefaultConstraintEvaluator, DefaultTraceLde, PartitionOptions, StarkDomain, Trace, TraceInfo, TracePolyTable, ZkParameters, crypto::{DefaultRandomCoin, MerkleTree, hashers::Blake3_256}, matrix::ColMatrix
 };
 
-use crate::{multishowpf::{aux_trace_table::{RapTraceTable, CAUX, GAMMA, QWAUX, WAUX, ZAUX}, AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_IND, C_IND, C_SIZE, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, HTR, K, M, M_IND, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, QW_IND, Q_IND, Q_RANGE, Q_RANGE_IND, R_IND, R_RANGE, R_RANGE_IND, SIGN_IND, SWAP_C_TRIT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, S_BALL_START, TAU, W_BIND, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND, _TRACE_LENGTH}, utils::poseidon_23_spec};
+use crate::{multishowpf::{aux_trace_table::{RapTraceTable, CAUX, GAMMA, QWAUX, WAUX, ZAUX}, AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_IND, C_IND, C_SIZE, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, HTR, K, M, M_IND, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, QW_IND, Q_IND, Q_RANGE, Q_RANGE_IND, R_IND, R_RANGE, R_RANGE_IND, SIGN_IND, SWAP_C_TRIT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, S_BALL_START, TAU, W_BIND, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND}, utils::poseidon_23_spec};
 
 use super::{
     BaseElement, ThinDilMulShowAir, FieldElement, ProofOptions, Prover, TRACE_WIDTH, air::PublicInputs,
@@ -127,11 +121,11 @@ impl ThinDilMulShowProver {
 
                         //i
                         let base_fe_q = base / 11;
-                        let base_fe_r = (base % 11);
+                        let base_fe_r = base % 11;
 
                         //j
                         let sel_fe_q = sel.to_string().parse::<usize>().unwrap() / 11;
-                        let sel_fe_r = (sel.to_string().parse::<usize>().unwrap() % 11);
+                        let sel_fe_r = sel.to_string().parse::<usize>().unwrap() % 11;
 
                         //Set up the swapped challenge field element decomposed to trits
                         trit_dec(state[C_IND + sel_fe_q].to_string().parse::<u64>().unwrap(), &mut state[SWAP_C_TRIT..(SWAP_C_TRIT + FE_TRIT_SIZE)]);

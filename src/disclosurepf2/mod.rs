@@ -1,17 +1,11 @@
-// Copyright (c) Facebook, Inc. and its affiliates.
-//
-// This source code is licensed under the MIT license found in the
-// LICENSE file in the root directory of this source tree.
-
 use log::debug;
-use rand_chacha::{rand_core::SeedableRng, ChaCha20Rng};
 use std::{time::Instant};
 use winterfell::{
-    crypto::{DefaultRandomCoin, MerkleTree}, math::{fields::f23201::BaseElement, FieldElement, StarkField}, FieldExtension, MockPrng, Proof, ProofOptions, Prover, Trace, VerifierError
+    crypto::{DefaultRandomCoin, MerkleTree}, math::{fields::f23201::BaseElement, FieldElement}, FieldExtension, Proof, ProofOptions, Prover, Trace, VerifierError
 };
 
 use crate::utils::poseidon_23_spec::{
-    CYCLE_LENGTH as HASH_CYCLE_LEN, NUM_ROUNDS as NUM_HASH_ROUNDS,
+    CYCLE_LENGTH as HASH_CYCLE_LEN,
     STATE_WIDTH as HASH_STATE_WIDTH, RATE_WIDTH as HASH_RATE_WIDTH,
     DIGEST_SIZE as HASH_DIGEST_WIDTH
 };
@@ -46,8 +40,8 @@ pub(crate) fn prove(
     cred_nonce: Vec<[BaseElement; 12]>
 ) -> Proof {
         let options = ProofOptions::new(
-            48, // number of queries
-            4,  // blowup factor
+            24, // number of queries
+            16,  // blowup factor
             20,  // grinding factor
             FieldExtension::Sextic,
             8,   // FRI folding factor
