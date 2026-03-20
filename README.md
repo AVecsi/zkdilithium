@@ -21,7 +21,7 @@ The library also exposes a C-compatible FFI layer, with bindings generated autom
 
 ## Getting Started
 
-**Prerequisites:** Rust and Cargo (stable toolchain recommended) and [cbindgen](https://github.com/mozilla/cbindgen).
+**Prerequisites:** Rust and Cargo.
 
 Clone the repository and build in release mode:
 
