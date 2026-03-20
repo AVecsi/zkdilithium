@@ -22,13 +22,13 @@ const HASH_CYCLE_MASK: [BaseElement; HASH_CYCLE_LEN] = [
 ];
 
 pub struct PublicInputs {
-    pub comm: [BaseElement; HASH_RATE_WIDTH],
+    pub comm: [BaseElement; HASH_DIGEST_WIDTH],
     pub nonce: [BaseElement; 12]
 }
 
 impl ToElements<BaseElement> for PublicInputs {
     fn to_elements(&self) -> Vec<BaseElement> {
-        let mut elements = Vec::with_capacity(HASH_RATE_WIDTH + 12);
+        let mut elements = Vec::with_capacity(HASH_DIGEST_WIDTH + 12);
         elements.extend_from_slice(&self.comm);
         elements.extend_from_slice(&self.nonce);
         elements
@@ -38,7 +38,7 @@ impl ToElements<BaseElement> for PublicInputs {
 pub struct ThinDilMulShowAir {
     context: AirContext<BaseElement>,
     cache: AtomicRefCell<Vec<u8>>,
-    comm: [BaseElement; HASH_RATE_WIDTH],
+    comm: [BaseElement; HASH_DIGEST_WIDTH],
     nonce: [BaseElement; 12]
 }
 
@@ -50,30 +50,30 @@ impl Air for ThinDilMulShowAir {
     // --------------------------------------------------------------------------------------------
     fn new(trace_info: TraceInfo, pub_inputs: Self::PublicInputs, options: ProofOptions) -> Self {
         let mut main_degrees = Vec::new();
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); C_SIZE]); // c
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); C_SIZE]); // c 0-24
 
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); HASH_CYCLE_LEN]); //Q_IND, Z_IND, Z_RANGE_IND 
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); HASH_CYCLE_LEN]); //R_IND, Z_RANGE_IND
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); HASH_CYCLE_LEN]); //SIGN_IND, Z_RANGE_IND
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); HASH_CYCLE_LEN]); //Q_IND, Z_IND, Z_RANGE_IND 24-32
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); HASH_CYCLE_LEN]); //R_IND, Z_RANGE_IND 32-40
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); HASH_CYCLE_LEN]); //SIGN_IND, Z_RANGE_IND 40-48
 
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 2*Q_RANGE]); // q_rangeproof, Z_RANGE_IND
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 2*R_RANGE]); // r_rangeproof, Z_RANGE_IND
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 2*Q_RANGE]); // q_rangeproof, Z_RANGE_IND 48-80
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 2*R_RANGE]); // r_rangeproof, Z_RANGE_IND 80-96
 
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); C_SIZE]); // fe ind, ranges
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); FE_TRIT_SIZE]); // trit ind, ranges
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); C_SIZE]); // fe ind, ranges 96 - 120
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); FE_TRIT_SIZE]); // trit ind, ranges 120-131
 
         //TODO hide the magic number
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 197]); // ranges
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 197]); // ranges 131-328
 
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); FE_TRIT_SIZE]); //before swap/set trits C_TRIT
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); FE_TRIT_SIZE]); //before swap/set trits C_TRIT 328-339
 
-        main_degrees.append(&mut vec![TransitionConstraintDegree::new(1); HASH_DIGEST_WIDTH]); // ctilde
-        main_degrees.append(&mut vec![TransitionConstraintDegree::new(1); HASH_DIGEST_WIDTH]); // m
+        main_degrees.append(&mut vec![TransitionConstraintDegree::new(1); HASH_DIGEST_WIDTH]); // ctilde 339-351
+        main_degrees.append(&mut vec![TransitionConstraintDegree::new(1); HASH_DIGEST_WIDTH]); // m 351-363
 
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); 6*HASH_STATE_WIDTH]); //hash_space
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); 6*HASH_STATE_WIDTH]); //hash_space 363-573
 
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); 1]); //SWAP_ASSERT
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); 1]); //SET_ASSERT
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); 1]); //SWAP_ASSERT 573
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); 1]); //SET_ASSERT 574
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 1]); //C_TRIT_ASSERT
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 2*4]); //W_DEC_ASSERT
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); 4]); //W_LOW_ASSERT
@@ -93,7 +93,7 @@ impl Air for ThinDilMulShowAir {
                 trace_info, 
                 main_degrees,
                 aux_degrees,
-                108,
+                96,
                 14, 
                 options
             ).set_num_transition_exemptions(2),
@@ -243,7 +243,7 @@ impl Air for ThinDilMulShowAir {
         for i in 0..C_SIZE {
             result.agg_constraint(
                 C_IND+i, 
-                qrdec_flag - s_fe[i], 
+                (qrdec_flag - s_fe[i]), 
                 (E::ONE - next[SWAP_DEC_FE_IND+i])*(next[C_IND+i] - current[C_IND+i])
             );
         }
@@ -257,22 +257,35 @@ impl Air for ThinDilMulShowAir {
         let mut sub = E::ZERO; 
         for i in 0..FE_TRIT_SIZE {
             mul += s_trit[i] * powers_of_2[i * 2]; //Should be modified with this amount because of swap
+            //println!("s_trit[i] {} {}", i, s_trit[i]);
             lhs += next[SWAP_DEC_TRIT_IND + i] * next[SWAP_C_TRIT + i]; //The value of the trit that needs to be swapped
+            //println!("next[SWAP_DEC_TRIT_IND {}, next[SWAP_C_TRIT + i]] {} ", next[SWAP_DEC_TRIT_IND + i], next[SWAP_C_TRIT + i]);
 
             addition += next[SWAP_DEC_TRIT_IND + i] * powers_of_2[i*2] * (next[SIGN_IND] + E::ONE); //The value that should be added during set
             sub += next[SWAP_C_TRIT + i] * (next[SWAP_DEC_TRIT_IND + i]) * powers_of_2[i*2]; //The swapped trits represented value
         }
 
+        //println!("mul {}", mul);
+        //println!("lhs {}", lhs);
+
         lhs = lhs * mul;
+
+        //println!("lhs {}", lhs);
         let swap_value = lhs;
         
         let mut set_change = E::ZERO;
         for i in 0..C_SIZE{
             rhs += s_fe[i]*(next[C_IND + i] - current[C_IND + i]); //Was modified with this amount
+            //println!("s_trit[i] {} {}", i, s_fe[i]);
+            //println!("next[C_IND + i] {}, current[C_IND + i] {} ", next[C_IND + i], current[C_IND + i]);
             set_change += (next[SWAP_DEC_FE_IND + i] * s_fe[i]) * (addition - sub); //If the j-th FE and i-th FE is the same the set with sign changed the FE by this amount
         }
 
+         //println!("rhs {}", rhs);
         rhs = rhs - set_change;
+         //println!("rhs {}", rhs);
+
+         //println!("qrdec_flag {}", qrdec_flag);
 
         result[SWAP_ASSERT] +=  lhs - rhs;
 
@@ -280,16 +293,17 @@ impl Air for ThinDilMulShowAir {
         lhs = E::ZERO;
         rhs = E::ZERO;
 
+        let mut swap_change = E::ZERO;
         for i in 0..C_SIZE{
             lhs += next[SWAP_DEC_FE_IND + i] * next[C_IND + i]; //The new value of the modified FE
         }
-        let swap_change = next[SWAP_FE_EQUAL_IND] * swap_value;
+        swap_change = next[SWAP_FE_EQUAL_IND] * swap_value;
 
         for i in 0..FE_TRIT_SIZE {
             rhs += next[SWAP_C_TRIT + i] * (E::ONE - next[SWAP_DEC_TRIT_IND + i]) * powers_of_2[i*2]; //The old value minus the swapped trit
         }
 
-        result[SET_ASSERT] +=  qrdec_flag * (lhs - rhs - addition) - swap_change;
+        result[SET_ASSERT] +=  qrdec_flag*(lhs-rhs-addition)-swap_change;
 
         // Q BIT DECOMPOSITION
         let (head, tail) = result.split_at_mut(Q_ASSERT);
@@ -643,7 +657,7 @@ impl Air for ThinDilMulShowAir {
         }
 
         //Assert the commitment is correct
-        for i in 0..HASH_RATE_WIDTH{
+        for i in 0..HASH_DIGEST_WIDTH{
             main_assertions.push(Assertion::single(HASH_IND+i, S_BALL_START - 1, self.comm[i]));
         }
 

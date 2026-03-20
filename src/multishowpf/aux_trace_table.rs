@@ -1,9 +1,10 @@
 use winter_utils::{uninit_vector};
 use winterfell::{
-    math::StarkField, matrix::ColMatrix, EvaluationFrame, Trace, TraceInfo
+    math::{FieldElement, StarkField}, matrix::ColMatrix, EvaluationFrame, Trace, TraceInfo
 };
+use crate::multishowpf::{C_TRIT_IND, HASH_CYCLE_LEN, QW_IND, W_IND, Z_IND};
 
-use super::AUX_WIDTH;
+use super::{AUX_WIDTH, PIT_START, PIT_END};
 
 pub const CAUX: usize = 0;
 pub const ZAUX: usize = CAUX + 1;

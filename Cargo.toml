@@ -20,5 +20,12 @@ generic_singleton = "0.5.1"
 atomic_refcell = "0.1.9"
 rand_chacha = { version = "0.3", default-features = false }
 
+[build-dependencies]
+cbindgen = "0.26"
+
 [patch.crates-io]
 winter-utils = { git = "https://github.com/AVecsi/winterfell", branch = "f23-zk" }
+
+[[test]]
+name = "test"
+path = "src/test/test.rs"

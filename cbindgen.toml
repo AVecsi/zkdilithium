@@ -1,0 +1,6 @@
+language = "C"
+header = "#include <stdint.h>\n#include <stdlib.h>"
+include_guard = "ZKDILITHIUM_PROOF_H"
+
+[export]
+exclude = ["Blake3_256"]

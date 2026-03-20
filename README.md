@@ -17,9 +17,11 @@ This library implements a post-quantum anonymous credential scheme based on zkDi
 
 This project uses the [winterfell](https://github.com/facebook/winterfell/) crate as the STARK prover backend. zkDilithium requires custom fields and extensions not present in upstream, and while a [prior fork](https://github.com/bwesterb/winterfell) added some of these, it lacked zero-knowledge proof support and had fallen out of date. Our [fork](https://github.com/avecsi/winterfell/) builds on this work and adds the necessary zkDilithium fields, field extensions, and ZK support.
 
+The library also exposes a C-compatible FFI layer, with bindings generated automatically by [cbindgen](https://github.com/mozilla/cbindgen). This allows the Rust implementation to be called from Go via CGo, as used in [pq-gabi](https://github.com/AVecsi/pq-gabi).
+
 ## Getting Started
 
-**Prerequisites:** Rust and Cargo (stable toolchain recommended).
+**Prerequisites:** Rust and Cargo (stable toolchain recommended) and [cbindgen](https://github.com/mozilla/cbindgen).
 
 Clone the repository and build in release mode:
 

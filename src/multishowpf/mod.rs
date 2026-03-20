@@ -7,7 +7,7 @@ use log::debug;
 use rand_chacha::{ChaCha20Rng, rand_core::SeedableRng};
 use std::{time::Instant};
 use winterfell::{
-    crypto::{DefaultRandomCoin, MerkleTree}, math::{fields::f23201::BaseElement, FieldElement}, FieldExtension, Proof, ProofOptions, Prover, Trace, VerifierError
+    crypto::{hashers::Blake3_256, DefaultRandomCoin, MerkleTree}, math::{fields::f23201::BaseElement, FieldElement}, FieldExtension, Proof, ProofOptions, Prover, Trace, VerifierError
 };
 
 use crate::utils::poseidon_23_spec::{
@@ -157,15 +157,13 @@ const PUBA: [[[u32;N]; 4] ; 4] = [
 
 const HTR: [u32;HASH_STATE_WIDTH] = [677417, 611466, 4336421, 2300803, 3046594, 4399100, 4364254, 516947, 6328490, 30133, 2823142, 6715498, 5308957, 7165742, 6850294, 5964650, 3951917, 5579908, 4975093, 371624, 3851416, 3799034, 905551, 3385886, 7081023, 5589663, 7276359, 6438915, 4764965, 3329391, 5281941, 5532262, 3182565, 2851502, 2574579];
 
-pub type Blake3_256 = winterfell::crypto::hashers::Blake3_256<BaseElement>;
-
-pub(crate) fn prove(
+pub fn prove(
     z: [[BaseElement; N]; K],
     w: [[BaseElement; N]; K],
     qw: [[BaseElement; N]; K],
     ctilde: [BaseElement; HASH_DIGEST_WIDTH],
     m: [BaseElement; 12],
-    comm: [BaseElement; HASH_RATE_WIDTH],
+    comm: [BaseElement; HASH_DIGEST_WIDTH],
     com_r: [BaseElement; 12],
     nonce: [BaseElement; 12]
 ) -> Proof {
@@ -176,8 +174,8 @@ pub(crate) fn prove(
     // 16,64,20
     // 14,128,20
         let options = ProofOptions::new(
-            48, // number of queries
-            4,  // blowup factor
+            24, // number of queries
+            16,  // blowup factor
             20,  // grinding factor
             FieldExtension::Sextic,
             8,   // FRI folding factor
@@ -211,24 +209,24 @@ pub(crate) fn prove(
         prover.prove(trace, Some(seed)).unwrap()
     }
 
-    pub fn verify(proof: Proof, comm: [BaseElement; HASH_RATE_WIDTH], nonce: [BaseElement; 12]) -> Result<(), VerifierError> {
+    pub fn verify(proof: Proof, comm: [BaseElement; HASH_DIGEST_WIDTH], nonce: [BaseElement; 12]) -> Result<(), VerifierError> {
         let pub_inputs = PublicInputs{comm, nonce};
         let acceptable_options =
             winterfell::AcceptableOptions::OptionSet(vec![proof.options().clone()]);
 
-        winterfell::verify::<ThinDilMulShowAir, Blake3_256, DefaultRandomCoin<Blake3_256>, MerkleTree<Blake3_256>>(
+        winterfell::verify::<ThinDilMulShowAir, Blake3_256<BaseElement>, DefaultRandomCoin<Blake3_256<BaseElement>>, MerkleTree<Blake3_256<BaseElement>>>(
             proof,
             pub_inputs,
             &acceptable_options,
         )
     }
 
-    pub fn verify_with_wrong_inputs(proof: Proof, comm: [BaseElement; HASH_RATE_WIDTH], nonce: [BaseElement; 12]) -> Result<(), VerifierError> {
+    pub fn verify_with_wrong_inputs(proof: Proof, comm: [BaseElement; HASH_DIGEST_WIDTH], nonce: [BaseElement; 12]) -> Result<(), VerifierError> {
         let pub_inputs = PublicInputs{comm, nonce};
         let acceptable_options =
             winterfell::AcceptableOptions::OptionSet(vec![proof.options().clone()]);
 
-        winterfell::verify::<ThinDilMulShowAir, Blake3_256, DefaultRandomCoin<Blake3_256>, MerkleTree<Blake3_256>>(
+        winterfell::verify::<ThinDilMulShowAir, Blake3_256<BaseElement>, DefaultRandomCoin<Blake3_256<BaseElement>>, MerkleTree<Blake3_256<BaseElement>>>(
             proof,
             pub_inputs,
             &acceptable_options,

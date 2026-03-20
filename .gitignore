@@ -16,3 +16,11 @@ Cargo.lock
 # VSCode files
 .DS_Store
 .vscode/
+
+# cbindgen generated header
+zkDilithiumProof.h
+
+# Compiled library artifacts that pq-gabi vendors locally
+*.a
+*.so
+*.dylib
