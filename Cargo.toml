@@ -3,6 +3,10 @@ name = "zk_dilithium"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "zk_dilithium"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
 [features]
 concurrent = ["winterfell/concurrent", "std"]
 default = ["std"]
