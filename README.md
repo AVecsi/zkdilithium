@@ -23,10 +23,8 @@ The library also exposes a C-compatible FFI layer, with bindings generated autom
 
 **Prerequisites:** Rust and Cargo.
 
-Clone the repository and build in release mode:
-
 ```bash
-cargo run --release
+cargo test --release -- --nocapture
 ```
 
 ## Module Structure
