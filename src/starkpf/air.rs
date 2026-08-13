@@ -396,7 +396,7 @@ impl Air for ThinDilAir {
             result.agg_constraint(
                 W_IND+i, 
                 matmul_flag, 
-                current[W_IND+i] - current[W_LOW_IND+i]-current[W_HIGH_IND+i]*twof*gamma2+current[W_BIND]*gamma2
+                current[W_IND+i] - current[W_LOW_IND+i]-current[W_HIGH_IND+i]*twof*gamma2+current[W_BIND+i]*gamma2
             );
             result.agg_constraint(W_BIND+i, matmul_flag, is_binary(current[W_BIND+i])); //w2.(1-w2)=0
             result.agg_constraint(W_DEC_ASSERT+2*i, matmul_flag, current[W_HIGH_IND+i]*current[W_BIND+i]); //w1.w2=0

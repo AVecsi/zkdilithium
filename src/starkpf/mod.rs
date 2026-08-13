@@ -37,7 +37,12 @@ const S_BALL_END: usize = TAU/HASH_CYCLE_LEN + 2; //Spending 6 HASH_CYCLES on BA
 const BETA: u32 = 80;
 const Z_LIMIT: u32 = 131072 - BETA; // 2^17 - BETA
 const W_HIGH_SHIFT: u32 = 8;
-const W_LOW_LIMIT: u32 = 65535-1;
+// Offset for the w0 range proof. One 17-bit decomposition of `w0 + W_LOW_LIMIT` pins
+// `w0` to `[-W_LOW_LIMIT, 2^17 - 1 - W_LOW_LIMIT]`. Decompose's non-special output set is
+// `[-(GAMMA2 - 1), GAMMA2]` -- `w0 = -GAMMA2` is carried by the W_BIND (w2) flag instead --
+// so the offset must be GAMMA2 - 1 to land on it exactly. This works one-sided only because
+// 2*GAMMA2 = 2^17 here; a field where 2*GAMMA2 is not a power of two needs two decompositions.
+const W_LOW_LIMIT: u32 = GAMMA2 - 1;
 const GAMMA2: u32 = 65536;
 
 const C_SIZE: usize = 24;

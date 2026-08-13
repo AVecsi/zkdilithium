@@ -274,10 +274,15 @@ impl ThinDilProver {
                         let (w0,w1) = wdec(windj);
                         let w2 = if windj== (M as i64-GAMMA2 as i64) {1} else {0};
                         state[W_BIND+j] = BaseElement::from(w2 as u8); // w2 is always a bit
-                        state[W_LOW_IND+j] = BaseElement::from((w0.rem_euclid(M.into())) as u64);
-                        if w2==1 {
-                            println!("{},{},{}", w0,w1,w2);
-                        }
+                        // When w2 = 1 the AIR pins w0 = w1 = 0 (the w0*w2 and w1*w2 constraints) and
+                        // carries the whole -GAMMA2 in the w2 term, so the trace must hold 0 here
+                        // rather than the -GAMMA2 that wdec returns.
+                        state[W_LOW_IND+j] = if w2 == 1 {
+                            debug_assert_eq!((w0, w1), (-(GAMMA2 as i64), 0), "w2 fired on an unexpected w");
+                            BaseElement::ZERO
+                        } else {
+                            BaseElement::from((w0.rem_euclid(M.into())) as u64)
+                        };
                     }
                     
                     // WLOW rangeproof
