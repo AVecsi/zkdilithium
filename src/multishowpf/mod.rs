@@ -533,11 +533,11 @@ pub fn prove(
     // 14,128,20
         let options = ProofOptions::new(
             // f23 has two-adicity 13, so trace_length_ext * blowup <= 2^13 = 8192. With
-            // zero-knowledge the 512-row trace extends to 1024, and blowup 16 would need
-            // 2^14 -- unreachable in this field. 48/4 is the first entry of the
-            // equivalent-security table commented above and what starkpf already uses.
-            48, // number of queries
-            4,  // blowup factor
+            // zero-knowledge the 512-row trace extends to 1024, so blowup 16 would need 2^14 --
+            // unreachable in this field. 32/8 sits exactly at the ceiling (1024 * 8 = 8192) and is
+            // the best size/speed balance of the equivalent-security options listed above.
+            32, // number of queries
+            8,  // blowup factor
             20,  // grinding factor
             FieldExtension::Sextic,
             8,   // FRI folding factor
