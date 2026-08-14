@@ -37,7 +37,12 @@ const TAU: usize = 39; //The actual number of swaps gets rounded up to 40 which 
 const S_BALL_END: usize = TAU/HASH_CYCLE_LEN + 2 + 1; //Spending 6 HASH_CYCLES on BALLSAMPLE, +1 for SBALLSTART
 const BETA: u32 = 80;
 const GAMMA1: u32 = crate::field::GAMMA1; // 2^17
-const Z_LIMIT: u32 = GAMMA1 - BETA;
+/// Largest `|z|` FIPS 204 admits: `|z| < GAMMA1 - BETA`, so the bound itself is one less.
+const Z_LIMIT: u32 = GAMMA1 - BETA - 1;
+/// Trim for the second `z` decomposition, so the two windows intersect in exactly
+/// `[-Z_LIMIT, Z_LIMIT]`. Previously the second offset was `BETA`, which left the window at
+/// `[-(GAMMA1-BETA), GAMMA1-1]` -- 80 values above the bound that a standard verifier rejects.
+const Z_SHIFT: u32 = (1u32 << Z_RANGE) - 1 - 2 * Z_LIMIT;
 
 /// Smallest `k` with `x <= 2^k - 1`: the width a bit-decomposition range proof of a value bounded by
 /// `x` needs. Every range width below is derived from `M` and `GAMMA2` through this, because four of
@@ -72,7 +77,7 @@ const GAMMA2: u32 = crate::field::GAMMA2;
 const C_SIZE: usize = 24;
 const FE_TRIT_SIZE: usize = 11;
 
-const Z_RANGE: usize = bits_for(2 * GAMMA1 - BETA - 1);
+const Z_RANGE: usize = bits_for(2 * Z_LIMIT);
 /// `q_i = x / (N - TAU + i)` for `x < M`, so at most `(M - 1) / (N - TAU)`.
 const Q_RANGE: usize = bits_for((M - 1) / ((N - TAU) as u32));
 /// `r_i = x % (N - TAU + i)`, so at most `N - 1`.
@@ -142,7 +147,10 @@ const Z_ASSERT: usize = CTILDE_ASSERT + HASH_DIGEST_WIDTH; // 4 w's, each has 3 
 // matter: they assert the range proofs land exactly on Decompose's output sets.
 const _: () = assert!(M == 8380417);            // 2^23 - 2^13 + 1
 const _: () = assert!(GAMMA2 == 95232);         // (M - 1) / 88
-const _: () = assert!(Z_LIMIT == 130992);       // GAMMA1 - BETA
+const _: () = assert!(Z_LIMIT == 130991);       // GAMMA1 - BETA - 1
+const _: () = assert!(Z_SHIFT == 161);
+// z must land in exactly [-Z_LIMIT, Z_LIMIT], the standard's |z| < GAMMA1 - BETA.
+const _: () = assert!((1u32 << Z_RANGE) - 1 - Z_LIMIT - Z_SHIFT == Z_LIMIT);
 const _: () = assert!(Z_RANGE == 18);
 const _: () = assert!(Q_RANGE == 16);
 const _: () = assert!(R_RANGE == 8);

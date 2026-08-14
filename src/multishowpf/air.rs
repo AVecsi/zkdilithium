@@ -5,7 +5,7 @@ use winterfell::{
 };
 
 use super::{BaseElement, FieldElement, ProofOptions, TRACE_WIDTH, HASH_CYCLE_LEN, aux_trace_table::{GAMMA, CAUX, ZAUX, WAUX, QWAUX, POLYMULTASSERT}};
-use crate::{multishowpf::{AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_ASSERT, CTILDE_IND, C_IND, C_SIZE, C_TRIT_ASSERT, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, HTR, K, M, M_BALL_ASSERT, M_COM_ASSERT, M_IND, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, PUBA, PUBT, QR_ASSERT, QW_IND, Q_ASSERT, Q_IND, Q_RANGE, Q_RANGE_IND, R_ASSERT, R_IND, R_RANGE, R_RANGE_IND, SET_ASSERT, SIGN_IND, SWAP_ASSERT, SWAP_C_DEC_ASSERT, SWAP_C_TRIT, SWAP_DEC_ASSERT, SWAP_DEC_FE_ASSERT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_ASSERT, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, S_BALL_START, TAU, W_BIND, W_DEC_ASSERT, W_HIGH_ASSERT, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_ASSERT, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, W_LOW_SHIFT, Z_ASSERT, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND}, utils::{are_equal, is_binary, is_ternary, is_ternary_challenge, poseidon_23_spec::{self, DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH as HASH_RATE_WIDTH, STATE_WIDTH as HASH_STATE_WIDTH}, EvaluationResult}};
+use crate::{multishowpf::{AUX_WIDTH, COM_END, COM_START, CTILDE_ASSERT, CTILDE_IND, C_IND, C_SIZE, C_TRIT_ASSERT, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, HTR, K, M, M_BALL_ASSERT, M_COM_ASSERT, M_IND, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, PUBA, PUBT, QR_ASSERT, QW_IND, Q_ASSERT, Q_IND, Q_RANGE, Q_RANGE_IND, R_ASSERT, R_IND, R_RANGE, R_RANGE_IND, SET_ASSERT, SIGN_IND, SWAP_ASSERT, SWAP_C_DEC_ASSERT, SWAP_C_TRIT, SWAP_DEC_ASSERT, SWAP_DEC_FE_ASSERT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_ASSERT, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, S_BALL_START, TAU, W_BIND, W_DEC_ASSERT, W_HIGH_ASSERT, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_ASSERT, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, W_LOW_SHIFT, Z_ASSERT, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND, Z_SHIFT}, utils::{are_equal, is_binary, is_ternary, is_ternary_challenge, poseidon_23_spec::{self, DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH as HASH_RATE_WIDTH, STATE_WIDTH as HASH_STATE_WIDTH}, EvaluationResult}};
 
 // DILITHIUM AIR
 // ================================================================================================
@@ -480,13 +480,13 @@ impl Air for ThinDilMulShowAir {
 
         // Z BIT DECOMPOSITION
         let zlimitf = E::from(Z_LIMIT);
-        let betaf = E::from(BETA);
+        let zshiftf = E::from(Z_SHIFT);
         
         let (head, tail) = result.split_at_mut(Z_ASSERT);
         for i in 0..8{
             let mut value = current[Z_IND + i/2] + zlimitf;
             if i%2 == 1 {
-                value += betaf;
+                value += zshiftf;
             }
             
             assert_bitdec(

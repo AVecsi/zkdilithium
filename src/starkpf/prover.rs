@@ -11,7 +11,7 @@ use winterfell::{
     crypto::{hashers::Blake3_256, DefaultRandomCoin, MerkleTree}, matrix::ColMatrix, AuxRandElements, CompositionPoly, CompositionPolyTrace, ConstraintCompositionCoefficients, DefaultConstraintCommitment, DefaultConstraintEvaluator, DefaultTraceLde, PartitionOptions, StarkDomain, Trace, TraceInfo, TracePolyTable, TraceTable, ZkParameters
 };
 
-use crate::{starkpf::{aux_trace_table::{RapTraceTable, CAUX, GAMMA, QWAUX, WAUX, ZAUX}, AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_IND, C_IND, C_SIZE, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, HTR, K, M, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, QW_IND, Q_IND, Q_RANGE, Q_RANGE_IND, R_IND, R_RANGE, R_RANGE_IND, SIGN_IND, SWAP_C_TRIT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, TAU, W_BIND, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, W_LOW_SHIFT, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND, _TRACE_LENGTH}, utils::poseidon_23_spec};
+use crate::{starkpf::{aux_trace_table::{RapTraceTable, CAUX, GAMMA, QWAUX, WAUX, ZAUX}, AUX_WIDTH, COM_END, COM_START, CTILDE_IND, C_IND, C_SIZE, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, HTR, K, M, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, QW_IND, Q_IND, Q_RANGE, Q_RANGE_IND, R_IND, R_RANGE, R_RANGE_IND, SIGN_IND, SWAP_C_TRIT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, TAU, W_BIND, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, W_LOW_SHIFT, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND, Z_SHIFT, _TRACE_LENGTH}, utils::poseidon_23_spec};
 
 use super::{
     BaseElement, ThinDilAir, FieldElement, ProofOptions, Prover, TRACE_WIDTH, air::PublicInputs,
@@ -175,7 +175,7 @@ impl ThinDilProver {
                 let wlowlimitf = BaseElement::from(W_LOW_LIMIT);
                 let wlowshiftf = BaseElement::from(W_LOW_SHIFT);
                 let whighshiftf = BaseElement::from(W_HIGH_SHIFT);
-                let betaf = BaseElement::from(BETA);
+                let zshiftf = BaseElement::from(Z_SHIFT);
                 if step == PIT_START - 1 {
                     // Reset HASH_STATE to 0
                     for j in HASH_STATE_WIDTH..3*HASH_STATE_WIDTH{
@@ -264,7 +264,7 @@ impl ThinDilProver {
                             &mut state[Z_RANGE_IND+(2*j)*Z_RANGE..(Z_RANGE_IND+(2*j+1)*Z_RANGE)]
                         );
                         bitdec(
-                            (state[Z_IND+j]+zlimitf+betaf).to_string().parse::<u64>().unwrap(),
+                            (state[Z_IND+j]+zlimitf+zshiftf).to_string().parse::<u64>().unwrap(),
                             &mut state[Z_RANGE_IND+(2*j+1)*Z_RANGE..(Z_RANGE_IND+(2*j+2)*Z_RANGE)]
                         );
                     }
