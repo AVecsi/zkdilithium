@@ -9,7 +9,7 @@ use winterfell::{
     AuxRandElements, CompositionPoly, CompositionPolyTrace, ConstraintCompositionCoefficients, DefaultConstraintCommitment, DefaultConstraintEvaluator, DefaultTraceLde, PartitionOptions, StarkDomain, Trace, TraceInfo, TracePolyTable, TraceTable, ZkParameters, crypto::{DefaultRandomCoin, MerkleTree, hashers::Blake3_256}, matrix::ColMatrix
 };
 
-use crate::{multishowpf::{aux_trace_table::{RapTraceTable, CAUX, GAMMA, QWAUX, WAUX, ZAUX}, AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_IND, C_IND, C_SIZE, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, HTR, K, M, M_IND, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, QW_IND, Q_IND, Q_RANGE, Q_RANGE_IND, R_IND, R_RANGE, R_RANGE_IND, SIGN_IND, SWAP_C_TRIT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, S_BALL_START, TAU, W_BIND, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND, _TRACE_LENGTH}, utils::poseidon_23_spec};
+use crate::{multishowpf::{aux_trace_table::{RapTraceTable, CAUX, GAMMA, QWAUX, WAUX, ZAUX}, AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_IND, C_IND, C_SIZE, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, HTR, K, M, M_IND, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, QW_IND, Q_IND, Q_RANGE, Q_RANGE_IND, R_IND, R_RANGE, R_RANGE_IND, SIGN_IND, SWAP_C_TRIT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, S_BALL_START, TAU, W_BIND, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, W_LOW_SHIFT, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND, _TRACE_LENGTH}, utils::poseidon_23_spec};
 
 use super::{
     BaseElement, ThinDilMulShowAir, FieldElement, ProofOptions, Prover, TRACE_WIDTH, air::PublicInputs,
@@ -190,6 +190,7 @@ impl ThinDilMulShowProver {
                 // PIT section                
                 let zlimitf = BaseElement::from(Z_LIMIT);
                 let wlowlimitf = BaseElement::from(W_LOW_LIMIT);
+                let wlowshiftf = BaseElement::from(W_LOW_SHIFT);
                 let whighshiftf = BaseElement::from(W_HIGH_SHIFT);
                 let betaf = BaseElement::from(BETA);
                 if step == PIT_START - 1 {
@@ -302,12 +303,16 @@ impl ThinDilMulShowProver {
                         };
                     }
                     
-                    // WLOW rangeproof
-                    // Since the ranges line up with powers of two we only have one range proof
+                    // WLOW rangeproof: two shifted decompositions, because 2*GAMMA2 is not a
+                    // power of two for Dilithium2's gamma2 and one window can never be exact.
                     for j in 0..K{
                         bitdec(
                             (state[W_LOW_IND+j]+wlowlimitf).to_string().parse::<u64>().unwrap(),
-                            &mut state[W_LOW_RANGE_IND+(j)*W_LOW_RANGE..(W_LOW_RANGE_IND+(j+1)*W_LOW_RANGE)]
+                            &mut state[W_LOW_RANGE_IND+(2*j)*W_LOW_RANGE..(W_LOW_RANGE_IND+(2*j+1)*W_LOW_RANGE)]
+                        );
+                        bitdec(
+                            (state[W_LOW_IND+j]+wlowlimitf+wlowshiftf).to_string().parse::<u64>().unwrap(),
+                            &mut state[W_LOW_RANGE_IND+(2*j+1)*W_LOW_RANGE..(W_LOW_RANGE_IND+(2*j+2)*W_LOW_RANGE)]
                         );
                     } 
 
@@ -508,7 +513,10 @@ fn challenge_trit_dec(mut x: u64, trits: &mut [BaseElement]) {
     // Placing the bits of x into the bits array in little endian form
     for i in 0..trits.len() {
         t = BaseElement::new((x % 4) as u32);
-        trits[i] = (BaseElement::from(5u32) * t - (BaseElement::from(3u32) * t * t)) * BaseElement::from(3670017u32);
+        // Maps the base-4 digit t in {0,1,2} to the challenge coefficient in {0,1,-1}:
+        // (5t - 3t^2)/2 sends 0->0, 1->1, 2->-1. The divisor was hardcoded as 3670017, which is
+        // 2^-1 mod 7340033 -- an f23201 constant. Written as a field division it follows the field.
+        trits[i] = (BaseElement::from(5u32) * t - (BaseElement::from(3u32) * t * t)) / BaseElement::from(2u32);
         x = x/4;
     }
 }

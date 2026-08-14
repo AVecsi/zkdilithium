@@ -3,6 +3,7 @@ use winterfell::{
 };
 
 pub mod poseidon_23_spec;
+pub mod poseidon_constants;
 
 // CONSTRAINT EVALUATION HELPERS
 // ================================================================================================

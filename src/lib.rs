@@ -1,7 +1,9 @@
 use winterfell::Proof;
-use winterfell::math::{fields::f23201::BaseElement, FieldElement};
+use winterfell::math::FieldElement;
+use crate::field::BaseElement;
 use std::io::Write;
 
+pub mod field;
 pub mod multishowpf;
 pub mod disclosurepf2;
 pub mod utils;

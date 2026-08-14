@@ -6,8 +6,9 @@
 use log::debug;
 use std::{time::Instant};
 use winterfell::{
-    crypto::{DefaultRandomCoin, MerkleTree}, math::{fields::f23201::BaseElement, FieldElement, StarkField}, FieldExtension, Proof, ProofOptions, Prover, Trace, VerifierError
+    crypto::{DefaultRandomCoin, MerkleTree}, math::{FieldElement, StarkField}, FieldExtension, Proof, ProofOptions, Prover, Trace, VerifierError
 };
+use crate::field::BaseElement;
 
 use crate::utils::poseidon_23_spec::{
     CYCLE_LENGTH as HASH_CYCLE_LEN, NUM_ROUNDS as NUM_HASH_ROUNDS,

@@ -1,8 +1,9 @@
 use log::debug;
 use std::{time::Instant};
 use winterfell::{
-    crypto::{hashers::Blake3_256, DefaultRandomCoin, MerkleTree}, math::{fields::f23201::BaseElement, FieldElement}, FieldExtension, Proof, ProofOptions, Prover, Trace, VerifierError
+    crypto::{hashers::Blake3_256, DefaultRandomCoin, MerkleTree}, math::{FieldElement}, FieldExtension, Proof, ProofOptions, Prover, Trace, VerifierError
 };
+use crate::field::BaseElement;
 
 use crate::{utils::poseidon_23_spec::{
     CYCLE_LENGTH as HASH_CYCLE_LEN, DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH as HASH_RATE_WIDTH, STATE_WIDTH as HASH_STATE_WIDTH
@@ -50,8 +51,12 @@ pub fn prove(
     credentials: Vec<Credential>
 ) -> Proof {
         let options = ProofOptions::new(
-            24, // number of queries
-            16,  // blowup factor
+            // f23 has two-adicity 13, so trace_length_ext * blowup <= 2^13 = 8192. With
+            // zero-knowledge the 512-row trace extends to 1024, and blowup 16 would need
+            // 2^14 -- unreachable in this field. 48/4 is the first entry of the
+            // equivalent-security table commented above and what starkpf already uses.
+            48, // number of queries
+            4,  // blowup factor
             20,  // grinding factor
             FieldExtension::Sextic,
             8,   // FRI folding factor

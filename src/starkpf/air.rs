@@ -5,7 +5,7 @@ use winterfell::{
 };
 
 use super::{BaseElement, FieldElement, ProofOptions, TRACE_WIDTH, HASH_CYCLE_LEN, aux_trace_table::{GAMMA, CAUX, ZAUX, WAUX, QWAUX, POLYMULTASSERT}};
-use crate::{starkpf::{AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_ASSERT, CTILDE_IND, C_IND, C_SIZE, C_TRIT_ASSERT, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, HTR, K, M, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, PUBA, PUBT, QR_ASSERT, QW_IND, Q_ASSERT, Q_IND, Q_RANGE, Q_RANGE_IND, R_ASSERT, R_IND, R_RANGE, R_RANGE_IND, SET_ASSERT, SIGN_IND, SWAP_ASSERT, SWAP_C_DEC_ASSERT, SWAP_C_TRIT, SWAP_DEC_ASSERT, SWAP_DEC_FE_ASSERT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_ASSERT, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, TAU, W_BIND, W_DEC_ASSERT, W_HIGH_ASSERT, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_ASSERT, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, Z_ASSERT, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND}, utils::{are_equal, is_binary, is_ternary, is_ternary_challenge, poseidon_23_spec::{self, DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH as HASH_RATE_WIDTH, STATE_WIDTH as HASH_STATE_WIDTH}, EvaluationResult}};
+use crate::{starkpf::{AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_ASSERT, CTILDE_IND, C_IND, C_SIZE, C_TRIT_ASSERT, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, HTR, K, M, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, PUBA, PUBT, QR_ASSERT, QW_IND, Q_ASSERT, Q_IND, Q_RANGE, Q_RANGE_IND, R_ASSERT, R_IND, R_RANGE, R_RANGE_IND, SET_ASSERT, SIGN_IND, SWAP_ASSERT, SWAP_C_DEC_ASSERT, SWAP_C_TRIT, SWAP_DEC_ASSERT, SWAP_DEC_FE_ASSERT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_ASSERT, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, TAU, W_BIND, W_DEC_ASSERT, W_HIGH_ASSERT, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_ASSERT, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, W_LOW_SHIFT, Z_ASSERT, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND}, utils::{are_equal, is_binary, is_ternary, is_ternary_challenge, poseidon_23_spec::{self, DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH as HASH_RATE_WIDTH, STATE_WIDTH as HASH_STATE_WIDTH}, EvaluationResult}};
 
 // DILITHIUM AIR
 // ================================================================================================
@@ -57,8 +57,11 @@ impl Air for ThinDilAir {
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); C_SIZE]); // fe ind, ranges
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); FE_TRIT_SIZE]); // trit ind, ranges
 
-        //TODO hide the magic number
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 197]); // ranges
+        // The range-proof block, from the end of the sample-in-ball registers to the start of the
+        // challenge trits. Was a hardcoded 197; derived now because widening a range proof moves it,
+        // and this list is indexed by column up to SWAP_ASSERT -- so a stale count silently
+        // desynchronises `result` from the layout and overflows the slice.
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); SWAP_C_TRIT - SWAP_FE_EQUAL_IND]); // ranges
 
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); FE_TRIT_SIZE]); //before swap/set trits C_TRIT
 
@@ -70,10 +73,14 @@ impl Air for ThinDilAir {
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(3, vec![PADDED_TRACE_LENGTH]); 1]); //SET_ASSERT
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 1]); //C_TRIT_ASSERT
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(2, vec![PADDED_TRACE_LENGTH]); 2*4]); //W_DEC_ASSERT
-        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); 4]); //W_LOW_ASSERT
+        main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); 2*4]); //W_LOW_ASSERT
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); 2*4]); //W_HIGH_ASSERT
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); HASH_DIGEST_WIDTH]); //CTILDE_ASSERT
         main_degrees.append(&mut vec![TransitionConstraintDegree::with_cycles(1, vec![PADDED_TRACE_LENGTH]); 8]); //Z_ASSERT
+
+        // Indexed by column up to SWAP_ASSERT and by named slot after it, so the length has to be
+        // exactly where the chain ends. Catches any future block resize.
+        debug_assert_eq!(main_degrees.len(), Z_ASSERT + 8, "declared degrees desynchronised from the layout");
 
         debug_assert_eq!(TRACE_WIDTH+AUX_WIDTH, trace_info.width());
 
@@ -403,11 +410,18 @@ impl Air for ThinDilAir {
             result.agg_constraint(W_DEC_ASSERT+2*i+1, matmul_flag, current[W_LOW_IND+i]*current[W_BIND+i]); //w0.w2=0
         }
 
+        // Two shifted decompositions pin w0 to [-W_LOW_LIMIT, 2^R - 1 - W_LOW_LIMIT - W_LOW_SHIFT],
+        // which is exactly Decompose's non-special output set. One would only be exact if 2*GAMMA2
+        // were a power of two, which it is not for Dilithium2's gamma2.
         let wlowlimitf = E::from(W_LOW_LIMIT);
+        let wlowshiftf = E::from(W_LOW_SHIFT);
         let (head, tail) = result.split_at_mut(W_LOW_ASSERT);
-        for i in 0..4{
-            let value = current[W_LOW_IND + i] + wlowlimitf;
-            
+        for i in 0..8{
+            let mut value = current[W_LOW_IND + i/2] + wlowlimitf;
+            if i%2 == 1 {
+                value += wlowshiftf;
+            }
+
             assert_bitdec(
                 &mut head[W_LOW_RANGE_IND+i*W_LOW_RANGE..W_LOW_RANGE_IND+(i+1)*W_LOW_RANGE], 
                 &current[W_LOW_RANGE_IND+i*W_LOW_RANGE..W_LOW_RANGE_IND+(i+1)*W_LOW_RANGE], 
