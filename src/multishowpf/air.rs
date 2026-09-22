@@ -5,7 +5,7 @@ use winterfell::{
 };
 
 use super::{BaseElement, FieldElement, ProofOptions, TRACE_WIDTH, HASH_CYCLE_LEN, aux_trace_table::{GAMMA, CAUX, ZAUX, WAUX, QWAUX, POLYMULTASSERT}};
-use crate::{multishowpf::{AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_ASSERT, CTILDE_IND, C_IND, C_SIZE, C_TRIT_ASSERT, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, HTR, K, M, M_BALL_ASSERT, M_COM_ASSERT, M_IND, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, PUBA, PUBT, QR_ASSERT, QW_IND, Q_ASSERT, Q_IND, Q_RANGE, Q_RANGE_IND, R_ASSERT, R_IND, R_RANGE, R_RANGE_IND, SET_ASSERT, SIGN_IND, SWAP_ASSERT, SWAP_C_DEC_ASSERT, SWAP_C_TRIT, SWAP_DEC_ASSERT, SWAP_DEC_FE_ASSERT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_ASSERT, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, S_BALL_START, TAU, W_BIND, W_DEC_ASSERT, W_HIGH_ASSERT, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_ASSERT, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, Z_ASSERT, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND}, utils::{are_equal, is_binary, is_ternary, is_ternary_challenge, poseidon_23_spec::{self, DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH as HASH_RATE_WIDTH, STATE_WIDTH as HASH_STATE_WIDTH}, EvaluationResult}};
+use crate::{multishowpf::{AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_ASSERT, CTILDE_IND, C_IND, C_SIZE, C_TRIT_ASSERT, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, IssuerKey, K, M, M_BALL_ASSERT, M_COM_ASSERT, M_IND, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, QR_ASSERT, QW_IND, Q_ASSERT, Q_IND, Q_RANGE, Q_RANGE_IND, R_ASSERT, R_IND, R_RANGE, R_RANGE_IND, SET_ASSERT, SIGN_IND, SWAP_ASSERT, SWAP_C_DEC_ASSERT, SWAP_C_TRIT, SWAP_DEC_ASSERT, SWAP_DEC_FE_ASSERT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_ASSERT, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, S_BALL_START, TAU, W_BIND, W_DEC_ASSERT, W_HIGH_ASSERT, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_ASSERT, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, Z_ASSERT, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND}, utils::{are_equal, is_binary, is_ternary, is_ternary_challenge, poseidon_23_spec::{self, DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH as HASH_RATE_WIDTH, STATE_WIDTH as HASH_STATE_WIDTH}, EvaluationResult}};
 
 // DILITHIUM AIR
 // ================================================================================================
@@ -23,14 +23,30 @@ const HASH_CYCLE_MASK: [BaseElement; HASH_CYCLE_LEN] = [
 
 pub struct PublicInputs {
     pub comm: [BaseElement; HASH_DIGEST_WIDTH],
-    pub nonce: [BaseElement; 12]
+    pub nonce: [BaseElement; 12],
+    /// The issuer public key the signature is claimed to be under.
+    pub issuer: IssuerKey
 }
 
 impl ToElements<BaseElement> for PublicInputs {
     fn to_elements(&self) -> Vec<BaseElement> {
-        let mut elements = Vec::with_capacity(HASH_DIGEST_WIDTH + 12);
+        // The issuer key goes into the transcript along with comm and nonce, so
+        // a proof is bound to the key it was produced under and cannot be
+        // replayed against a different issuer.
+        let mut elements = Vec::with_capacity(
+            HASH_DIGEST_WIDTH + 12 + HASH_STATE_WIDTH + K * N + K * K * N,
+        );
         elements.extend_from_slice(&self.comm);
         elements.extend_from_slice(&self.nonce);
+        elements.extend_from_slice(&self.issuer.htr);
+        for t in self.issuer.t.iter() {
+            elements.extend_from_slice(t);
+        }
+        for row in self.issuer.a.iter() {
+            for a in row.iter() {
+                elements.extend_from_slice(a);
+            }
+        }
         elements
     }
 }
@@ -39,7 +55,8 @@ pub struct ThinDilMulShowAir {
     context: AirContext<BaseElement>,
     cache: AtomicRefCell<Vec<u8>>,
     comm: [BaseElement; HASH_DIGEST_WIDTH],
-    nonce: [BaseElement; 12]
+    nonce: [BaseElement; 12],
+    issuer: IssuerKey
 }
 
 impl Air for ThinDilMulShowAir {
@@ -99,6 +116,7 @@ impl Air for ThinDilMulShowAir {
             ).set_num_transition_exemptions(2),
             comm: pub_inputs.comm,
             nonce: pub_inputs.nonce,
+            issuer: pub_inputs.issuer,
             cache: AtomicRefCell::new(vec![]),
         }
     }
@@ -510,7 +528,7 @@ impl Air for ThinDilMulShowAir {
             result.agg_constraint(
                 M_BALL_ASSERT + i, 
                 mball_flag.into(), 
-                are_equal(current[HASH_IND+i],E::from(HTR[i])+current[M_IND+i])
+                are_equal(current[HASH_IND+i],E::from(self.issuer.htr[i])+current[M_IND+i])
             );
         }
     }
@@ -572,14 +590,14 @@ impl Air for ThinDilMulShowAir {
                 } else {
                     let mut pubt: [[E; N]; 4] = [[E::ZERO; N]; 4];
                     for j in 0..4 {
-                        pubt[j] = PUBT[j].map(E::from);
+                        pubt[j] = self.issuer.t[j].map(E::from);
                         t_eval[j] = poly_eval(&pubt[j], random_elements[0]);
                         t_eval[j].write_into(&mut *cache);
                     }
                     let mut puba: [[[E; N]; 4]; 4] = [[[E::ZERO; N]; 4]; 4];
                     for j in 0..4 {
                         for i in 0..4 {
-                            puba[i][j] = PUBA[i][j].map(E::from);
+                            puba[i][j] = self.issuer.a[i][j].map(E::from);
                             a_eval[i][j] = poly_eval(&puba[i][j], random_elements[0]);
                             a_eval[i][j].write_into(&mut *cache);
                         }
@@ -671,9 +689,9 @@ impl Air for ThinDilMulShowAir {
             main_assertions.push(Assertion::single(HASH_IND+i, COM_END, BaseElement::ZERO));
         }
 
-        // Assert HASH_RATE..HASH_STATE is HTR on step COM_START
+        // Assert HASH_RATE..HASH_STATE is the issuer's htr on step COM_START
         for i in HASH_RATE_WIDTH..HASH_STATE_WIDTH{
-            main_assertions.push(Assertion::single(HASH_IND+i, COM_START, BaseElement::from(HTR[i])));
+            main_assertions.push(Assertion::single(HASH_IND+i, COM_START, self.issuer.htr[i]));
         }
 
         // Assert C_IND is initialized to zero at the beginning (HASH_CYCLE_LEN-1)

@@ -5,6 +5,7 @@ use std::io::Write;
 pub mod multishowpf;
 pub mod disclosurepf2;
 pub mod utils;
+pub mod test_key;
 
 use crate::disclosurepf2::{Credential, DisclosureInputs};
 use crate::utils::poseidon_23_spec::{
@@ -12,15 +13,48 @@ use crate::utils::poseidon_23_spec::{
     RATE_WIDTH as HASH_RATE_WIDTH
 };
 
-use crate::multishowpf::{N, K};
+use crate::multishowpf::{N, K, IssuerKey};
+use crate::utils::poseidon_23_spec::STATE_WIDTH as HASH_STATE_WIDTH;
 
 use std::ffi::CStr;
 use std::ptr;
 use std::slice;
 use std::time::{Duration, Instant};
 
+/// Reads an issuer public key out of the three flat C buffers the caller
+/// provides: `htr` (HASH_STATE_WIDTH elements), `t` (K*N, `[j][n]`) and `a`
+/// (K*K*N, `[i][j][n]`).
+///
+/// # Safety
+/// The three pointers must each be non-null and point to at least the number
+/// of `u32`s listed above.
+unsafe fn read_issuer_key(htr_ptr: *const u32, t_ptr: *const u32, a_ptr: *const u32) -> IssuerKey {
+    let mut htr = [BaseElement::ZERO; HASH_STATE_WIDTH];
+    for i in 0..HASH_STATE_WIDTH {
+        htr[i] = BaseElement::new(*(htr_ptr.add(i)));
+    }
+
+    let mut t = [[BaseElement::ZERO; N]; K];
+    for j in 0..K {
+        for n in 0..N {
+            t[j][n] = BaseElement::new(*(t_ptr.add(j * N + n)));
+        }
+    }
+
+    let mut a = [[[BaseElement::ZERO; N]; K]; K];
+    for i in 0..K {
+        for j in 0..K {
+            for n in 0..N {
+                a[i][j][n] = BaseElement::new(*(a_ptr.add((i * K + j) * N + n)));
+            }
+        }
+    }
+
+    IssuerKey { htr, t, a }
+}
+
 #[no_mangle]
-pub extern "C" fn prove_signature(z_ptr: *const u32, w_ptr: *const u32, qw_ptr: *const u32, ctilde_ptr: *const u32, m_ptr: *const u32, comm_ptr: *const u32, comr_ptr: *const u32, nonce_ptr: *const u32, out_proof_bytes_len: *mut usize) -> *const u8 {
+pub extern "C" fn prove_signature(z_ptr: *const u32, w_ptr: *const u32, qw_ptr: *const u32, ctilde_ptr: *const u32, m_ptr: *const u32, comm_ptr: *const u32, comr_ptr: *const u32, nonce_ptr: *const u32, htr_ptr: *const u32, t_ptr: *const u32, a_ptr: *const u32, out_proof_bytes_len: *mut usize) -> *const u8 {
 
     //For now lets just assume that the input's length is ok
     //Convert from the C bytes to something rust readable
@@ -65,8 +99,10 @@ pub extern "C" fn prove_signature(z_ptr: *const u32, w_ptr: *const u32, qw_ptr: 
         }
     }
 
+    let issuer = unsafe { read_issuer_key(htr_ptr, t_ptr, a_ptr) };
+
     let start = Instant::now();
-    let proof_bytes = multishowpf::prove(z, w, qw, ctilde, m, comm, com_r, nonce).to_bytes();
+    let proof_bytes = multishowpf::prove(z, w, qw, ctilde, m, comm, com_r, nonce, issuer).to_bytes();
     println!("{:?}", start.elapsed());
 
     unsafe {
@@ -77,7 +113,7 @@ pub extern "C" fn prove_signature(z_ptr: *const u32, w_ptr: *const u32, qw_ptr: 
 }
 
 #[no_mangle]
-pub extern "C" fn verify_signature(proof_bytes_ptr: *const u8, proof_bytes_len: usize, comm_ptr: *const u32, nonce_ptr: *const u32) -> u32 {
+pub extern "C" fn verify_signature(proof_bytes_ptr: *const u8, proof_bytes_len: usize, comm_ptr: *const u32, nonce_ptr: *const u32, htr_ptr: *const u32, t_ptr: *const u32, a_ptr: *const u32) -> u32 {
 
     let proof = Proof::from_bytes(unsafe {slice::from_raw_parts(proof_bytes_ptr, proof_bytes_len)}).unwrap();
     let mut comm: [BaseElement; HASH_DIGEST_WIDTH] = [BaseElement::ZERO; HASH_DIGEST_WIDTH];
@@ -92,7 +128,9 @@ pub extern "C" fn verify_signature(proof_bytes_ptr: *const u8, proof_bytes_len: 
         }
     }
 
-    match multishowpf::verify(proof.clone(), comm, nonce) {
+    let issuer = unsafe { read_issuer_key(htr_ptr, t_ptr, a_ptr) };
+
+    match multishowpf::verify(proof.clone(), comm, nonce, issuer) {
         Ok(_) => {
             //println!("Verified.");
             return 1;

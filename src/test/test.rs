@@ -8,7 +8,8 @@ mod tests {
 
     use zk_dilithium::{
         disclosurepf2::{self, Credential, DisclosureInputs},
-        multishowpf::{self, K, N, verify_with_wrong_inputs as multi_verify_wrong},
+        multishowpf::{self, IssuerKey, K, N, verify_with_wrong_inputs as multi_verify_wrong},
+        test_key::{TEST_HTR, TEST_PUBA, TEST_PUBT},
         utils::poseidon_23_spec::DIGEST_SIZE as HASH_DIGEST_WIDTH
     };
 
@@ -66,10 +67,18 @@ mod tests {
         let comm_u32: [u32; HASH_DIGEST_WIDTH] = [5428787, 1148244, 535908, 7205632, 5701352, 6817121, 2538742, 4014714, 4875333, 4023951, 5049287, 121171];
         let comm: [BaseElement; HASH_DIGEST_WIDTH] = comm_u32.map(BaseElement::new);
 
+        // The z/w/qw/ctilde fixtures above are a real signature under the demo
+        // issuer key, so that is the key the proof has to be bound to.
+        let issuer = IssuerKey {
+            htr: TEST_HTR.map(BaseElement::new),
+            t: TEST_PUBT.map(|t| t.map(BaseElement::new)),
+            a: TEST_PUBA.map(|row| row.map(|a| a.map(BaseElement::new))),
+        };
+
         // //generate multishow proof
         print!("MULTI-SHOW PROOF\n");
         let now = Instant::now();
-        let proof = multishowpf::prove(z, w, qw, ctilde, m, comm, com_r, nonce);
+        let proof = multishowpf::prove(z, w, qw, ctilde, m, comm, com_r, nonce, issuer);
         print!(
             "---------------------\nMulti-show proof generated in {} ms\n",
             now.elapsed().as_millis()
@@ -91,7 +100,7 @@ mod tests {
         //let parsed_proof = StarkProof::from_bytes(&proof_bytes).unwrap();
         // assert_eq!(proof, parsed_proof);
         let now = Instant::now();
-        match  multishowpf::verify(proof.clone(), comm, nonce) {
+        match  multishowpf::verify(proof.clone(), comm, nonce, issuer) {
             Ok(_) => print!(
                 "Multi-show proof verified in {:.1} ms\n",
                 now.elapsed().as_micros() as f64 / 1000f64
@@ -99,11 +108,19 @@ mod tests {
             Err(msg) => print!("Failed to verify multi-show proof: {}\n", msg),
         }
         print!("============================================================\n");
-        match multi_verify_wrong(proof.clone(), comm, [BaseElement::ZERO;12]) {
-            Ok(_) => print!(
-                "Proof passed on wrong inputs!\n"
-            ),
+        match multi_verify_wrong(proof.clone(), comm, [BaseElement::ZERO;12], issuer) {
+            Ok(_) => panic!("Proof passed on a wrong nonce!"),
             Err(msg) => print!("Failed to verify multi-show proof on wrong inputs as expected: {}\n", msg),
+        }
+        print!("============================================================\n");
+
+        // Same proof, a different issuer key. This is what the compiled-in
+        // HTR/PUBT/PUBA constants made impossible to express.
+        let mut other = issuer;
+        other.htr[0] += BaseElement::ONE;
+        match multishowpf::verify(proof.clone(), comm, nonce, other) {
+            Ok(_) => panic!("Proof verified under a different issuer key!"),
+            Err(msg) => print!("Rejected under a different issuer key as expected: {}\n", msg),
         }
         print!("============================================================\n");
 
