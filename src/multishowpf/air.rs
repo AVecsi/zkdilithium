@@ -5,7 +5,7 @@ use winterfell::{
 };
 
 use super::{BaseElement, FieldElement, ProofOptions, TRACE_WIDTH, HASH_CYCLE_LEN, aux_trace_table::{GAMMA, CAUX, ZAUX, WAUX, QWAUX, POLYMULTASSERT}};
-use crate::{multishowpf::{AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_ASSERT, CTILDE_IND, C_IND, C_SIZE, C_TRIT_ASSERT, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, IssuerKey, K, M, M_BALL_ASSERT, M_COM_ASSERT, M_IND, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, QR_ASSERT, QW_IND, Q_ASSERT, Q_IND, Q_RANGE, Q_RANGE_IND, R_ASSERT, R_IND, R_RANGE, R_RANGE_IND, SET_ASSERT, SIGN_IND, SWAP_ASSERT, SWAP_C_DEC_ASSERT, SWAP_C_TRIT, SWAP_DEC_ASSERT, SWAP_DEC_FE_ASSERT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_ASSERT, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, S_BALL_START, TAU, W_BIND, W_DEC_ASSERT, W_HIGH_ASSERT, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_ASSERT, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, Z_ASSERT, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND}, utils::{are_equal, is_binary, is_ternary, is_ternary_challenge, poseidon_23_spec::{self, DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH as HASH_RATE_WIDTH, STATE_WIDTH as HASH_STATE_WIDTH}, EvaluationResult}};
+use crate::{multishowpf::{AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_ASSERT, CTILDE_IND, C_IND, C_SIZE, C_TRIT_ASSERT, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, IssuerKey, K, M, M_BALL_ASSERT, M_COM_ASSERT, M_IND, N, NONCE_INSERT, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, QR_ASSERT, QW_IND, Q_ASSERT, Q_IND, Q_RANGE, Q_RANGE_IND, R_ASSERT, R_IND, R_RANGE, R_RANGE_IND, SET_ASSERT, SIGN_IND, SWAP_ASSERT, SWAP_C_DEC_ASSERT, SWAP_C_TRIT, SWAP_DEC_ASSERT, SWAP_DEC_FE_ASSERT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_ASSERT, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, S_BALL_START, TAU, W_BIND, W_DEC_ASSERT, W_HIGH_ASSERT, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_ASSERT, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, Z_ASSERT, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND}, utils::{are_equal, is_binary, is_ternary, is_ternary_challenge, poseidon_23_spec::{self, DIGEST_SIZE as HASH_DIGEST_WIDTH, RATE_WIDTH as HASH_RATE_WIDTH, STATE_WIDTH as HASH_STATE_WIDTH}, EvaluationResult}};
 
 // DILITHIUM AIR
 // ================================================================================================
@@ -110,7 +110,7 @@ impl Air for ThinDilMulShowAir {
                 trace_info, 
                 main_degrees,
                 aux_degrees,
-                96,
+                107,
                 14, 
                 options
             ).set_num_transition_exemptions(2),
@@ -159,10 +159,11 @@ impl Air for ThinDilMulShowAir {
 
         let mcom_flag = _periodic_values[17];
         let mball_flag = _periodic_values[18];
+        let hchain_flag = _periodic_values[19];
 
-        let s_fe = &_periodic_values[19..(19 + C_SIZE)];
-        let s_trit = &_periodic_values[(19 + C_SIZE)..(19 + C_SIZE) + FE_TRIT_SIZE];
-        let ark = &_periodic_values[((19 + C_SIZE) + FE_TRIT_SIZE)..];
+        let s_fe = &_periodic_values[20..(20 + C_SIZE)];
+        let s_trit = &_periodic_values[(20 + C_SIZE)..(20 + C_SIZE) + FE_TRIT_SIZE];
+        let ark = &_periodic_values[((20 + C_SIZE) + FE_TRIT_SIZE)..];
 
         let powers_of_2 = vec![
             E::ONE,
@@ -196,6 +197,11 @@ impl Air for ThinDilMulShowAir {
             &ark,
             hashmask_flag
         );
+
+        // Carry H(m||salt) into the second compression
+        for i in 0..HASH_DIGEST_WIDTH {
+            result.agg_constraint(HASH_IND + i, hchain_flag, next[HASH_IND + i] - current[HASH_IND + i]);
+        }
 
         // Copy ctilde
         for i in 0..HASH_DIGEST_WIDTH {
@@ -671,7 +677,12 @@ impl Air for ThinDilMulShowAir {
 
         //Assert the nonce is correct
         for i in HASH_DIGEST_WIDTH..2*HASH_DIGEST_WIDTH{
-            main_assertions.push(Assertion::single(HASH_IND+i, 0, self.nonce[i-HASH_DIGEST_WIDTH]));
+            main_assertions.push(Assertion::single(HASH_IND+i, NONCE_INSERT, self.nonce[i-HASH_DIGEST_WIDTH]));
+        }
+
+        //Assert the capacity was cleaned before the second compression
+        for i in HASH_RATE_WIDTH..HASH_STATE_WIDTH{
+            main_assertions.push(Assertion::single(HASH_IND+i, NONCE_INSERT, BaseElement::ZERO));
         }
 
         //Assert the commitment is correct
@@ -748,6 +759,7 @@ impl Air for ThinDilMulShowAir {
         result.push(get_polymult_mask());
         result.push(get_mcom_mask());
         result.push(get_mball_mask());
+        result.push(get_hchain_mask());
         result.append(&mut get_swap_fe_constants());
         result.append(&mut get_swap_trit_constants());
         result.append(&mut poseidon_23_spec::get_round_constants());
@@ -928,7 +940,7 @@ fn get_qr_base_constants() -> Vec<BaseElement> {
 
 fn get_hashmask_constants() -> Vec<BaseElement> {
     let mut hashmask_const = vec![BaseElement::ZERO; PADDED_TRACE_LENGTH];
-    for i in 0..HASH_CYCLE_LEN{
+    for i in 0..S_BALL_START{
         hashmask_const[i] = HASH_CYCLE_MASK[i%HASH_CYCLE_LEN];
     }
 
@@ -1135,6 +1147,13 @@ fn get_mcom_mask() -> Vec<BaseElement> {
     mcom_mask
 }
 
+fn get_hchain_mask() -> Vec<BaseElement> {
+    let mut hchain_mask = vec![BaseElement::ZERO; PADDED_TRACE_LENGTH];
+
+    hchain_mask[NONCE_INSERT - 1] = BaseElement::ONE;
+
+    hchain_mask
+}
 fn get_mball_mask() -> Vec<BaseElement> {
     let mut mball_mask = vec![BaseElement::ZERO; PADDED_TRACE_LENGTH];
 

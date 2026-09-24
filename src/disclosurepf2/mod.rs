@@ -26,6 +26,8 @@ pub const HASH_IND: usize = STORAGE_IND + HASH_DIGEST_WIDTH;
 
 pub const HASHING_PHASE_START: usize = 0;
 
+pub const CRED_TAIL_CYCLES: usize = 3;
+
 pub const TRACE_WIDTH: usize = HASH_IND + HASH_STATE_WIDTH*3;
 
 #[derive(Clone)]
@@ -47,7 +49,8 @@ pub struct DisclosureInputs {
 }
 
 pub fn prove(
-    credentials: Vec<Credential>
+    credentials: Vec<Credential>,
+    nonce: [BaseElement; 12]
 ) -> Proof {
         let options = ProofOptions::new(
             24, // number of queries
@@ -75,7 +78,7 @@ pub fn prove(
         // create a prover
         let now = Instant::now();
         //TODO assuming now that non of the attributes number are odd (padding already included if needed)
-        let prover = DisclosureProver::new(options.clone(), credentials);
+        let prover = DisclosureProver::new(options.clone(), credentials, nonce);
 
         // generate execution trace
         let trace = prover.build_trace();
@@ -96,8 +99,8 @@ pub fn prove(
         prover.prove(trace, Some(seed)).unwrap()
     }
 
-pub fn verify(proof: Proof, disclosures: Vec<DisclosureInputs>) -> Result<(), VerifierError> {
-    let pub_inputs = PublicInputs{disclosures};
+pub fn verify(proof: Proof, disclosures: Vec<DisclosureInputs>, nonce: [BaseElement; 12]) -> Result<(), VerifierError> {
+    let pub_inputs = PublicInputs{disclosures, nonce};
     let acceptable_options =
             winterfell::AcceptableOptions::OptionSet(vec![proof.options().clone()]);
 
@@ -108,8 +111,8 @@ pub fn verify(proof: Proof, disclosures: Vec<DisclosureInputs>) -> Result<(), Ve
         )
 }
 
-pub(crate) fn verify_with_wrong_inputs(proof: Proof, disclosures: Vec<DisclosureInputs>) -> Result<(), VerifierError> {
-    let pub_inputs = PublicInputs{disclosures};
+pub(crate) fn verify_with_wrong_inputs(proof: Proof, disclosures: Vec<DisclosureInputs>, nonce: [BaseElement; 12]) -> Result<(), VerifierError> {
+    let pub_inputs = PublicInputs{disclosures, nonce};
     let acceptable_options =
             winterfell::AcceptableOptions::OptionSet(vec![proof.options().clone()]);
 

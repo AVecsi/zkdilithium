@@ -54,7 +54,7 @@ unsafe fn read_issuer_key(htr_ptr: *const u32, t_ptr: *const u32, a_ptr: *const 
 }
 
 #[no_mangle]
-pub extern "C" fn prove_signature(z_ptr: *const u32, w_ptr: *const u32, qw_ptr: *const u32, ctilde_ptr: *const u32, m_ptr: *const u32, comm_ptr: *const u32, comr_ptr: *const u32, nonce_ptr: *const u32, htr_ptr: *const u32, t_ptr: *const u32, a_ptr: *const u32, out_proof_bytes_len: *mut usize) -> *const u8 {
+pub extern "C" fn prove_signature(z_ptr: *const u32, w_ptr: *const u32, qw_ptr: *const u32, ctilde_ptr: *const u32, m_ptr: *const u32, comm_ptr: *const u32, comr_ptr: *const u32, salt_ptr: *const u32, nonce_ptr: *const u32, htr_ptr: *const u32, t_ptr: *const u32, a_ptr: *const u32, out_proof_bytes_len: *mut usize) -> *const u8 {
 
     //For now lets just assume that the input's length is ok
     //Convert from the C bytes to something rust readable
@@ -65,6 +65,7 @@ pub extern "C" fn prove_signature(z_ptr: *const u32, w_ptr: *const u32, qw_ptr: 
     let mut m: [BaseElement; HASH_DIGEST_WIDTH] = [BaseElement::ZERO; HASH_DIGEST_WIDTH];
     let mut comm: [BaseElement; HASH_DIGEST_WIDTH] = [BaseElement::ZERO; HASH_DIGEST_WIDTH];
     let mut com_r: [BaseElement; HASH_DIGEST_WIDTH] = [BaseElement::ZERO; HASH_DIGEST_WIDTH];
+    let mut salt: [BaseElement; HASH_DIGEST_WIDTH] = [BaseElement::ZERO; HASH_DIGEST_WIDTH];
     let mut nonce: [BaseElement; HASH_DIGEST_WIDTH] = [BaseElement::ZERO; HASH_DIGEST_WIDTH];
 
     unsafe {
@@ -95,6 +96,10 @@ pub extern "C" fn prove_signature(z_ptr: *const u32, w_ptr: *const u32, qw_ptr: 
         }
 
         for i in 0..HASH_DIGEST_WIDTH {
+            salt[i] = BaseElement::new(*(salt_ptr.add(i)));
+        }
+
+        for i in 0..HASH_DIGEST_WIDTH {
             nonce[i] = BaseElement::new(*(nonce_ptr.add(i)));
         }
     }
@@ -102,7 +107,7 @@ pub extern "C" fn prove_signature(z_ptr: *const u32, w_ptr: *const u32, qw_ptr: 
     let issuer = unsafe { read_issuer_key(htr_ptr, t_ptr, a_ptr) };
 
     let start = Instant::now();
-    let proof_bytes = multishowpf::prove(z, w, qw, ctilde, m, comm, com_r, nonce, issuer).to_bytes();
+    let proof_bytes = multishowpf::prove(z, w, qw, ctilde, m, comm, com_r, salt, nonce, issuer).to_bytes();
     println!("{:?}", start.elapsed());
 
     unsafe {
@@ -170,9 +175,12 @@ pub struct CDisclosure {
 pub extern "C" fn prove_attributes(
     creds: *const CCredential,
     num_creds: usize,
+    nonce_ptr: *const u32,
     out_len: *mut usize,
 ) -> *const u8 {
     let creds = unsafe { std::slice::from_raw_parts(creds, num_creds) };
+    let nonce: [BaseElement; HASH_DIGEST_WIDTH] =
+        std::array::from_fn(|i| BaseElement::new(unsafe { *nonce_ptr.add(i) }));
 
     let credentials = creds.iter().map(|c| {
         let attrs_raw = unsafe { slice::from_raw_parts(c.attributes, c.num_attributes * HASH_DIGEST_WIDTH) };
@@ -189,7 +197,7 @@ pub extern "C" fn prove_attributes(
         }).collect();
 
     let start = Instant::now();
-    let proof_bytes = disclosurepf2::prove(credentials).to_bytes();
+    let proof_bytes = disclosurepf2::prove(credentials, nonce).to_bytes();
     println!("{:?}", start.elapsed());
     
     unsafe { *out_len = proof_bytes.len(); }
@@ -202,6 +210,7 @@ pub extern "C" fn verify_attributes(
     proof_bytes_len: usize,
     discls_ptr: *const CDisclosure,
     num_discls: usize,
+    nonce_ptr: *const u32,
 ) -> u32 {
 
     let proof = Proof::from_bytes(unsafe {
@@ -228,7 +237,10 @@ pub extern "C" fn verify_attributes(
         }
     }).collect();
 
-    match disclosurepf2::verify(proof, disclosures) {
+    let nonce: [BaseElement; HASH_DIGEST_WIDTH] =
+        std::array::from_fn(|i| BaseElement::new(unsafe { *nonce_ptr.add(i) }));
+
+    match disclosurepf2::verify(proof, disclosures, nonce) {
         Ok(_) => 1,
         Err(msg) => {
             println!("Failed to verify proof: {}", msg);

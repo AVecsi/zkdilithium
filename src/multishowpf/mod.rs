@@ -33,7 +33,7 @@ const M: u32 = 7340033; // 2^23 - 2^20 + 1
 pub const N: usize = 256;
 pub const K: usize = 4;
 const TAU: usize = 39; //The actual number of swaps gets rounded up to 40 which is fine for security
-const S_BALL_END: usize = TAU/HASH_CYCLE_LEN + 2 + 1; //Spending 6 HASH_CYCLES on BALLSAMPLE, +1 for SBALLSTART
+const S_BALL_END: usize = TAU/HASH_CYCLE_LEN + 2 + 2; //Spending 6 HASH_CYCLES on BALLSAMPLE, +2 for the two SBALLSTART hash cycles
 const BETA: u32 = 80;
 const Z_LIMIT: u32 = 131072 - BETA; // 2^17 - BETA
 const W_HIGH_SHIFT: u32 = 8;
@@ -109,7 +109,9 @@ const Z_ASSERT: usize = CTILDE_ASSERT + HASH_DIGEST_WIDTH; // 4 w's, each has 3 
 pub const TRACE_WIDTH: usize = HASH_IND + 3*HASH_STATE_WIDTH;
 pub const AUX_WIDTH: usize = 1 + 4 + 4 + 4 + 1; // C + Z + W + QW + GAMMA(random evaluation point)
 
-pub const S_BALL_START: usize = HASH_CYCLE_LEN;
+pub const HASH_PHASE_CYCLES: usize = 2;
+pub const NONCE_INSERT: usize = HASH_CYCLE_LEN;
+pub const S_BALL_START: usize = HASH_PHASE_CYCLES*HASH_CYCLE_LEN;
 
 pub const COM_START: usize = (HASH_CYCLE_LEN)*(S_BALL_END+1);
 pub const COM_END: usize = (HASH_CYCLE_LEN)*(S_BALL_END+2);
@@ -149,6 +151,7 @@ pub fn prove(
     m: [BaseElement; 12],
     comm: [BaseElement; HASH_DIGEST_WIDTH],
     com_r: [BaseElement; 12],
+    salt: [BaseElement; 12],
     nonce: [BaseElement; 12],
     issuer: IssuerKey
 ) -> Proof {
@@ -175,7 +178,7 @@ pub fn prove(
 
         // create a prover
         let now = Instant::now();
-        let prover = ThinDilMulShowProver::new(options.clone(), z, w, qw, ctilde, m, comm, com_r, nonce, issuer);
+        let prover = ThinDilMulShowProver::new(options.clone(), z, w, qw, ctilde, m, comm, com_r, salt, nonce, issuer);
 
         // generate execution trace
         let trace = prover.build_trace();

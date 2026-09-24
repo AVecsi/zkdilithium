@@ -9,7 +9,7 @@ use winterfell::{
     AuxRandElements, CompositionPoly, CompositionPolyTrace, ConstraintCompositionCoefficients, DefaultConstraintCommitment, DefaultConstraintEvaluator, DefaultTraceLde, PartitionOptions, StarkDomain, Trace, TraceInfo, TracePolyTable, TraceTable, ZkParameters, crypto::{DefaultRandomCoin, MerkleTree, hashers::Blake3_256}, matrix::ColMatrix
 };
 
-use crate::{multishowpf::{aux_trace_table::{RapTraceTable, CAUX, GAMMA, QWAUX, WAUX, ZAUX}, AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_IND, C_IND, C_SIZE, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, IssuerKey, K, M, M_IND, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, QW_IND, Q_IND, Q_RANGE, Q_RANGE_IND, R_IND, R_RANGE, R_RANGE_IND, SIGN_IND, SWAP_C_TRIT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, S_BALL_END, S_BALL_START, TAU, W_BIND, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND, _TRACE_LENGTH}, utils::poseidon_23_spec};
+use crate::{multishowpf::{aux_trace_table::{RapTraceTable, CAUX, GAMMA, QWAUX, WAUX, ZAUX}, AUX_WIDTH, BETA, COM_END, COM_START, CTILDE_IND, C_IND, C_SIZE, C_TRIT_IND, FE_TRIT_SIZE, GAMMA2, HASH_IND, IssuerKey, K, M, M_IND, N, PADDED_TRACE_LENGTH, PIT_END, PIT_LEN, PIT_START, QW_IND, Q_IND, Q_RANGE, Q_RANGE_IND, R_IND, R_RANGE, R_RANGE_IND, SIGN_IND, SWAP_C_TRIT, SWAP_DEC_FE_IND, SWAP_DEC_TRIT_IND, SWAP_FE_EQUAL_IND, NONCE_INSERT, S_BALL_END, S_BALL_START, TAU, W_BIND, W_HIGH_IND, W_HIGH_RANGE, W_HIGH_RANGE_IND, W_HIGH_SHIFT, W_IND, W_LOW_IND, W_LOW_LIMIT, W_LOW_RANGE, W_LOW_RANGE_IND, Z_IND, Z_LIMIT, Z_RANGE, Z_RANGE_IND, _TRACE_LENGTH}, utils::poseidon_23_spec};
 
 use super::{
     BaseElement, ThinDilMulShowAir, FieldElement, ProofOptions, Prover, TRACE_WIDTH, air::PublicInputs,
@@ -27,13 +27,14 @@ pub struct ThinDilMulShowProver {
     m: [BaseElement; 12],
     comm: [BaseElement; HASH_DIGEST_WIDTH],
     com_r: [BaseElement; 12],
+    salt: [BaseElement; 12],
     nonce: [BaseElement; 12],
     issuer: IssuerKey
 }
 
 impl ThinDilMulShowProver {
-    pub fn new(options: ProofOptions, z: [[BaseElement; N]; K], w: [[BaseElement; N]; K],  qw: [[BaseElement; N]; K], ctilde: [BaseElement; HASH_DIGEST_WIDTH], m: [BaseElement; 12], comm: [BaseElement; HASH_DIGEST_WIDTH], com_r: [BaseElement; 12], nonce: [BaseElement; 12], issuer: IssuerKey) -> Self {
-        Self {options, z, w, qw, ctilde, m, comm, com_r, nonce, issuer}
+    pub fn new(options: ProofOptions, z: [[BaseElement; N]; K], w: [[BaseElement; N]; K],  qw: [[BaseElement; N]; K], ctilde: [BaseElement; HASH_DIGEST_WIDTH], m: [BaseElement; 12], comm: [BaseElement; HASH_DIGEST_WIDTH], com_r: [BaseElement; 12], salt: [BaseElement; 12], nonce: [BaseElement; 12], issuer: IssuerKey) -> Self {
+        Self {options, z, w, qw, ctilde, m, comm, com_r, salt, nonce, issuer}
     }
 
     /// Builds an execution trace for computing a Fibonacci sequence of the specified length such
@@ -54,10 +55,10 @@ impl ThinDilMulShowProver {
                     state[M_IND + i] = self.m[i];
                 }
 
-                // message nonce
+                // message salt
                 for i in 0..HASH_DIGEST_WIDTH{
                     state[HASH_IND + i] =  state[M_IND + i];
-                    state[HASH_IND + HASH_DIGEST_WIDTH + i] = self.nonce[i];
+                    state[HASH_IND + HASH_DIGEST_WIDTH + i] = self.salt[i];
                 }
             },
             |step, state| {
@@ -69,6 +70,16 @@ impl ThinDilMulShowProver {
                 // apply poseidon round in all but the last round of HASH_CYCLE
                 if cycle_pos < NUM_HASH_ROUNDS {
                     poseidon_23_spec::apply_round(&mut state[HASH_IND..(HASH_IND + 3*HASH_STATE_WIDTH)], step);
+                }
+
+                // second compression: H(H(m||salt)||nonce)
+                if step == NONCE_INSERT - 1 {
+                    for i in 0..HASH_DIGEST_WIDTH {
+                        state[HASH_IND + HASH_DIGEST_WIDTH + i] = self.nonce[i];
+                    }
+                    for i in HASH_RATE_WIDTH..HASH_STATE_WIDTH {
+                        state[HASH_IND + i] = BaseElement::ZERO;
+                    }
                 }
 
                 //Set up the trace for sample in ball

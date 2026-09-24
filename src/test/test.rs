@@ -10,8 +10,20 @@ mod tests {
         disclosurepf2::{self, Credential, DisclosureInputs},
         multishowpf::{self, IssuerKey, K, N, verify_with_wrong_inputs as multi_verify_wrong},
         test_key::{TEST_HTR, TEST_PUBA, TEST_PUBT},
-        utils::poseidon_23_spec::DIGEST_SIZE as HASH_DIGEST_WIDTH
+        utils::poseidon_23_spec::{apply_round, DIGEST_SIZE as HASH_DIGEST_WIDTH, NUM_ROUNDS, STATE_WIDTH}
     };
+
+    fn compress(left: &[BaseElement; HASH_DIGEST_WIDTH], right: &[BaseElement; HASH_DIGEST_WIDTH]) -> [BaseElement; HASH_DIGEST_WIDTH] {
+        let mut state = [BaseElement::ZERO; 3*STATE_WIDTH];
+        state[..HASH_DIGEST_WIDTH].copy_from_slice(left);
+        state[HASH_DIGEST_WIDTH..2*HASH_DIGEST_WIDTH].copy_from_slice(right);
+        for i in 0..NUM_ROUNDS {
+            apply_round(&mut state, i);
+        }
+        let mut out = [BaseElement::ZERO; HASH_DIGEST_WIDTH];
+        out.copy_from_slice(&state[..HASH_DIGEST_WIDTH]);
+        out
+    }
 
     #[test]
     fn test() {
@@ -61,11 +73,13 @@ mod tests {
         let com_r_u32: [u32; HASH_DIGEST_WIDTH] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, ];
         let com_r: [BaseElement; HASH_DIGEST_WIDTH] = com_r_u32.map(BaseElement::new);
 
-        let nonce_u32: [u32; HASH_DIGEST_WIDTH] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ];
+        let salt_u32: [u32; HASH_DIGEST_WIDTH] = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, ];
+        let salt: [BaseElement; HASH_DIGEST_WIDTH] = salt_u32.map(BaseElement::new);
+
+        let nonce_u32: [u32; HASH_DIGEST_WIDTH] = [2, 3, 5, 7, 11, 13, 17, 19, 23, 29, 31, 37, ];
         let nonce: [BaseElement; HASH_DIGEST_WIDTH] = nonce_u32.map(BaseElement::new);
 
-        let comm_u32: [u32; HASH_DIGEST_WIDTH] = [5428787, 1148244, 535908, 7205632, 5701352, 6817121, 2538742, 4014714, 4875333, 4023951, 5049287, 121171];
-        let comm: [BaseElement; HASH_DIGEST_WIDTH] = comm_u32.map(BaseElement::new);
+        let comm = compress(&compress(&m, &salt), &nonce);
 
         // The z/w/qw/ctilde fixtures above are a real signature under the demo
         // issuer key, so that is the key the proof has to be bound to.
@@ -78,7 +92,7 @@ mod tests {
         // //generate multishow proof
         print!("MULTI-SHOW PROOF\n");
         let now = Instant::now();
-        let proof = multishowpf::prove(z, w, qw, ctilde, m, comm, com_r, nonce, issuer);
+        let proof = multishowpf::prove(z, w, qw, ctilde, m, comm, com_r, salt, nonce, issuer);
         print!(
             "---------------------\nMulti-show proof generated in {} ms\n",
             now.elapsed().as_millis()
@@ -140,21 +154,22 @@ mod tests {
                 example_attrs[i] = example_attrs_u32[i].map(BaseElement::new);
             }
 
-            let discl_comm_u32: [u32; HASH_DIGEST_WIDTH] = [1313231, 6654844, 4143685, 5714284, 356438, 2348683, 3451912, 3197493, 2024558, 2763223, 4568430, 356450];
-            let discl_comm: [BaseElement; HASH_DIGEST_WIDTH] = discl_comm_u32.map(BaseElement::new);
+            let salted_hash_u32: [u32; HASH_DIGEST_WIDTH] = [1313231, 6654844, 4143685, 5714284, 356438, 2348683, 3451912, 3197493, 2024558, 2763223, 4568430, 356450];
+            let salted_hash: [BaseElement; HASH_DIGEST_WIDTH] = salted_hash_u32.map(BaseElement::new);
 
-            let nonce0: [BaseElement; HASH_DIGEST_WIDTH] = [BaseElement::ONE; HASH_DIGEST_WIDTH];
+            let salt0: [BaseElement; HASH_DIGEST_WIDTH] = [BaseElement::ONE; HASH_DIGEST_WIDTH];
+            let discl_comm = compress(&salted_hash, &nonce);
             let wrong_nonce0: [BaseElement; HASH_DIGEST_WIDTH] = [BaseElement::ZERO; HASH_DIGEST_WIDTH];
 
             let disclosed_indices = [2,4,5].to_vec();
             let user_attributes = 2;
 
-            let credential = Credential{ attributes: example_attrs.to_vec(), num_of_user_attributes: user_attributes, disclosed_indices: disclosed_indices.clone(), salted_hash: discl_comm, salt: nonce0 };
+            let credential = Credential{ attributes: example_attrs.to_vec(), num_of_user_attributes: user_attributes, disclosed_indices: disclosed_indices.clone(), salted_hash: discl_comm, salt: salt0 };
             
             print!("NEW DISCLOSURE PROOF\n");
             let mut start = Instant::now();
 
-            let proof = disclosurepf2::prove([credential.clone(), credential.clone(), credential.clone()].to_vec());
+            let proof = disclosurepf2::prove([credential.clone(), credential.clone(), credential.clone()].to_vec(), nonce);
             println!("proof len {}", proof.to_bytes().len());
             println!("{:?}", start.elapsed());
             let proof_bytes = proof.to_bytes();
@@ -170,15 +185,20 @@ mod tests {
             let disclosure_input = DisclosureInputs{ disclosed_attributes: disclosed_attributes, indices: disclosed_indices, num_of_attributes: example_attrs.len(), num_of_user_attributes: user_attributes, salted_hash: discl_comm };
 
             start = Instant::now();
-            match disclosurepf2::verify(proof.clone(), [disclosure_input.clone(), disclosure_input.clone(), disclosure_input.clone()].to_vec()) {
+            match disclosurepf2::verify(proof.clone(), [disclosure_input.clone(), disclosure_input.clone(), disclosure_input.clone()].to_vec(), nonce) {
                 Ok(_) => {
                     println!("Verified.");
                 },
                 Err(msg) => 
                 {
-                    println!("Failed to verify proof: {}", msg);
+                    panic!("Failed to verify disclosure proof: {}", msg);
                 }
             }
             println!("{:?}", start.elapsed());
+
+            match disclosurepf2::verify(proof.clone(), [disclosure_input.clone(), disclosure_input.clone(), disclosure_input.clone()].to_vec(), wrong_nonce0) {
+                Ok(_) => panic!("Disclosure proof passed on a wrong nonce!"),
+                Err(msg) => println!("Rejected on a wrong nonce as expected: {}", msg),
+            }
     }
 }

@@ -10,19 +10,20 @@ use super::{
     Prover, HASH_CYCLE_LEN, HASH_DIGEST_WIDTH, HASH_RATE_WIDTH, HASH_STATE_WIDTH
 };
 
-use crate::{disclosurepf2::{Credential, DisclosureInputs, FIRST_ATTR_IND, HASH_IND, HASHING_PHASE_START, STORAGE_IND, TRACE_WIDTH}, utils::poseidon_23_spec::{self}};
+use crate::{disclosurepf2::{CRED_TAIL_CYCLES, Credential, DisclosureInputs, FIRST_ATTR_IND, HASH_IND, HASHING_PHASE_START, STORAGE_IND, TRACE_WIDTH}, utils::poseidon_23_spec::{self}};
 
 //attr0 secret attr, same for every cred
 //attr1 nonce attr, fresh when cred issued, never disclosed for RP
 
 pub struct DisclosureProver {
     options: ProofOptions,
-    credentials: Vec<Credential>
+    credentials: Vec<Credential>,
+    nonce: [BaseElement; 12]
 }
 
 impl DisclosureProver {
-    pub fn new(options: ProofOptions, credentials: Vec<Credential>) -> Self {
-        Self { options, credentials }
+    pub fn new(options: ProofOptions, credentials: Vec<Credential>, nonce: [BaseElement; 12]) -> Self {
+        Self { options, credentials, nonce }
     }
 
     pub fn build_trace(&self) -> TraceTable<BaseElement> {
@@ -47,7 +48,9 @@ impl DisclosureProver {
         
         let randomize_cred_trace_length_sum = self.credentials.len()*HASH_CYCLE_LEN;
 
-        let trace_length = hash_trace_lengths_sum + final_hash_length_sum + randomize_cred_trace_length_sum;
+        let nonce_cred_trace_length_sum = self.credentials.len()*HASH_CYCLE_LEN;
+
+        let trace_length = hash_trace_lengths_sum + final_hash_length_sum + randomize_cred_trace_length_sum + nonce_cred_trace_length_sum;
 
         //trace length must be power of 2
         let mut i = 16; 
@@ -77,9 +80,9 @@ impl DisclosureProver {
                         let mut step_in_cred = step - HASHING_PHASE_START;
                         let mut cred_index = 0;
                         for i in 0..hash_trace_lengths.len() {
-                            if step_in_cred >= hash_trace_lengths[i] + 2*HASH_CYCLE_LEN /*addition for final hash and credential hash*/{
+                            if step_in_cred >= hash_trace_lengths[i] + CRED_TAIL_CYCLES*HASH_CYCLE_LEN {
                                 cred_index += 1;
-                                step_in_cred = step_in_cred - hash_trace_lengths[i] - 2*HASH_CYCLE_LEN;
+                                step_in_cred = step_in_cred - hash_trace_lengths[i] - CRED_TAIL_CYCLES*HASH_CYCLE_LEN;
                             }
                         }
 
@@ -135,8 +138,8 @@ impl DisclosureProver {
                                 state[HASH_IND + i] = BaseElement::ZERO;
                             }
 
-                        } else {
-                            //Load nonce for hash result
+                        } else if step_in_cred == hash_trace_lengths[cred_index] + HASH_CYCLE_LEN {
+                            //Load salt for hash result
                             for i in HASH_DIGEST_WIDTH..HASH_RATE_WIDTH {
                                 state[HASH_IND + i] = self.credentials[cred_index].salt[i - HASH_DIGEST_WIDTH];
                             }
@@ -145,7 +148,16 @@ impl DisclosureProver {
                             for i in HASH_RATE_WIDTH..HASH_STATE_WIDTH {
                                 state[HASH_IND + i] = BaseElement::ZERO;
                             }
-                            
+                        } else {
+                            //Load nonce for hash result
+                            for i in HASH_DIGEST_WIDTH..HASH_RATE_WIDTH {
+                                state[HASH_IND + i] = self.nonce[i - HASH_DIGEST_WIDTH];
+                            }
+
+                            //Clear capacity
+                            for i in HASH_RATE_WIDTH..HASH_STATE_WIDTH {
+                                state[HASH_IND + i] = BaseElement::ZERO;
+                            }
                         }
                     }
 
@@ -188,7 +200,7 @@ impl Prover for DisclosureProver {
             disclosures.push(DisclosureInputs { disclosed_attributes: disclosed_attributes, indices: credential.disclosed_indices.clone(), num_of_attributes: credential.attributes.len(), num_of_user_attributes: credential.num_of_user_attributes, salted_hash: credential.salted_hash});
         }
 
-        PublicInputs{disclosures}
+        PublicInputs{disclosures, nonce: self.nonce}
     }
     fn options(&self) -> &ProofOptions {
         &self.options

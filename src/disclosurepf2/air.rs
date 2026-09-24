@@ -4,7 +4,7 @@ use winterfell::{
 };
 
 use super::{BaseElement, FieldElement, ProofOptions, HASH_CYCLE_LEN, HASH_DIGEST_WIDTH, HASH_RATE_WIDTH, HASH_STATE_WIDTH};
-use crate::{disclosurepf2::{DisclosureInputs, FIRST_ATTR_IND, HASH_IND, STORAGE_IND}, utils::{EvaluationResult, poseidon_23_spec}};
+use crate::{disclosurepf2::{CRED_TAIL_CYCLES, DisclosureInputs, FIRST_ATTR_IND, HASH_IND, STORAGE_IND}, utils::{EvaluationResult, poseidon_23_spec}};
 
 const HASH_CYCLE_MASK: [BaseElement; HASH_CYCLE_LEN] = [
     BaseElement::ONE,
@@ -18,7 +18,8 @@ const HASH_CYCLE_MASK: [BaseElement; HASH_CYCLE_LEN] = [
 ];
 
 pub struct PublicInputs {
-    pub disclosures: Vec<DisclosureInputs>
+    pub disclosures: Vec<DisclosureInputs>,
+    pub nonce: [BaseElement; 12]
 }
 
 impl ToElements<BaseElement> for PublicInputs {
@@ -41,6 +42,8 @@ impl ToElements<BaseElement> for PublicInputs {
             elements.extend_from_slice(&disclosure.salted_hash);
         }
 
+        elements.extend_from_slice(&self.nonce);
+
         elements
     }
 }
@@ -54,7 +57,8 @@ impl Serializable for PublicInputs {
 
 pub struct DisclosureAir {
     context: AirContext<BaseElement>,
-    disclosures: Vec<DisclosureInputs>
+    disclosures: Vec<DisclosureInputs>,
+    nonce: [BaseElement; 12]
 }
 
 impl Air for DisclosureAir {
@@ -75,7 +79,7 @@ impl Air for DisclosureAir {
         let trace_length = trace_info.length();
 
         //68 assertions on each disclosed credentials
-        let num_assertions = pub_inputs.disclosures.len() * 56;
+        let num_assertions = pub_inputs.disclosures.len() * 79;
         DisclosureAir {
             context: AirContext::new(
                 trace_info, 
@@ -83,7 +87,8 @@ impl Air for DisclosureAir {
                 num_assertions,
                  options
             ).set_num_transition_exemptions(trace_length / 2),
-            disclosures: pub_inputs.disclosures
+            disclosures: pub_inputs.disclosures,
+            nonce: pub_inputs.nonce
         }
     }
 
@@ -219,12 +224,22 @@ impl Air for DisclosureAir {
                 main_assertions.push(Assertion::single(HASH_IND + i, steps_done + (self.disclosures[cert_index].num_of_attributes / 2 * HASH_CYCLE_LEN) + HASH_CYCLE_LEN, BaseElement::ZERO));
             }
 
-            //Assert the final result is the given hash 44-56
-            for i in 0..HASH_DIGEST_WIDTH {
-                main_assertions.push(Assertion::single(HASH_IND + i, steps_done + (self.disclosures[cert_index].num_of_attributes / 2 * HASH_CYCLE_LEN) + 2*HASH_CYCLE_LEN - 1, self.disclosures[cert_index].salted_hash[i]));
+            //Assert that the capacity was cleaned up correctly before the nonce hash 44-55
+            for i in HASH_RATE_WIDTH..HASH_STATE_WIDTH {
+                main_assertions.push(Assertion::single(HASH_IND + i, steps_done + (self.disclosures[cert_index].num_of_attributes / 2 * HASH_CYCLE_LEN) + 2*HASH_CYCLE_LEN, BaseElement::ZERO));
             }
 
-            steps_done += (self.disclosures[cert_index].num_of_attributes / 2 * HASH_CYCLE_LEN) + HASH_CYCLE_LEN + HASH_CYCLE_LEN;
+            //Assert the nonce was loaded correctly 55-67
+            for i in 0..HASH_DIGEST_WIDTH {
+                main_assertions.push(Assertion::single(HASH_IND + HASH_DIGEST_WIDTH + i, steps_done + (self.disclosures[cert_index].num_of_attributes / 2 * HASH_CYCLE_LEN) + 2*HASH_CYCLE_LEN, self.nonce[i]));
+            }
+
+            //Assert the final result is the given hash 67-79
+            for i in 0..HASH_DIGEST_WIDTH {
+                main_assertions.push(Assertion::single(HASH_IND + i, steps_done + (self.disclosures[cert_index].num_of_attributes / 2 * HASH_CYCLE_LEN) + CRED_TAIL_CYCLES*HASH_CYCLE_LEN - 1, self.disclosures[cert_index].salted_hash[i]));
+            }
+
+            steps_done += (self.disclosures[cert_index].num_of_attributes / 2 * HASH_CYCLE_LEN) + CRED_TAIL_CYCLES*HASH_CYCLE_LEN;
         }
 
         main_assertions
@@ -308,7 +323,7 @@ fn get_hashmask_constants(padded_trace_length: usize, disclosures: &Vec<Disclosu
     
     let mut trace_length = 0;
     for disclosure in disclosures {
-        trace_length += disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN + 2*HASH_CYCLE_LEN;
+        trace_length += disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN + CRED_TAIL_CYCLES*HASH_CYCLE_LEN;
     }
 
     //TODO to trace_length is fine?
@@ -335,7 +350,7 @@ fn get_hashcopy_constants(padded_trace_length: usize, disclosures: &Vec<Disclosu
         }
 
         trace_position += disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN;
-        trace_position += 2*HASH_CYCLE_LEN;
+        trace_position += CRED_TAIL_CYCLES*HASH_CYCLE_LEN;
     }
 
     hashcopy_const
@@ -349,9 +364,10 @@ fn cred_hash_copy_flag_constants(padded_trace_length: usize, disclosures: &Vec<D
     for disclosure in disclosures {
         trace_position += (disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN) + HASH_CYCLE_LEN;
         cred_hash_copy_const[trace_position] = BaseElement::ONE;
+        cred_hash_copy_const[trace_position + HASH_CYCLE_LEN] = BaseElement::ONE;
 
         //Set the counter to the beginning of the next cert
-        trace_position += HASH_CYCLE_LEN;
+        trace_position += 2*HASH_CYCLE_LEN;
     }
 
     cred_hash_copy_const
@@ -365,7 +381,7 @@ fn get_first_attribute_constants(padded_trace_length: usize, disclosures: &Vec<D
     for disclosure in disclosures {
         first_attribute_copy_const[trace_position] = BaseElement::ONE;
 
-        trace_position += (disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN) + 2*HASH_CYCLE_LEN;
+        trace_position += (disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN) + CRED_TAIL_CYCLES*HASH_CYCLE_LEN;
     }
 
     first_attribute_copy_const
@@ -380,7 +396,7 @@ fn get_storage_constants(padded_trace_length: usize, disclosures: &Vec<Disclosur
 
         storage_const[trace_position + (disclosure.num_of_user_attributes / 2 * HASH_CYCLE_LEN)] = BaseElement::ONE;
 
-        trace_position += (disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN) + 2*HASH_CYCLE_LEN;
+        trace_position += (disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN) + CRED_TAIL_CYCLES*HASH_CYCLE_LEN;
     }
 
     storage_const
@@ -397,7 +413,7 @@ fn get_final_attr_hash_constants(padded_trace_length: usize, disclosures: &Vec<D
 
         final_attr_hash_const[trace_position] = BaseElement::ONE;
 
-        trace_position += 2*HASH_CYCLE_LEN;
+        trace_position += CRED_TAIL_CYCLES*HASH_CYCLE_LEN;
     }
 
     final_attr_hash_const
@@ -427,7 +443,7 @@ fn get_even_attr_load_constants(padded_trace_length: usize, disclosures: &Vec<Di
             }
         }
 
-        trace_position += disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN + 2*HASH_CYCLE_LEN;
+        trace_position += disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN + CRED_TAIL_CYCLES*HASH_CYCLE_LEN;
     }
 
     return even_attr_load_const
@@ -457,7 +473,7 @@ fn get_odd_attr_load_constants(padded_trace_length: usize, disclosures: &Vec<Dis
             }
         }
 
-        trace_position += disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN + 2*HASH_CYCLE_LEN;
+        trace_position += disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN + CRED_TAIL_CYCLES*HASH_CYCLE_LEN;
     }
 
     return odd_attr_load_const
@@ -477,7 +493,7 @@ fn get_even_attr_load_first_constant(padded_trace_length: usize, disclosures: &V
             }
         }
 
-        trace_position += disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN + 2*HASH_CYCLE_LEN;
+        trace_position += disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN + CRED_TAIL_CYCLES*HASH_CYCLE_LEN;
     }
 
     return even_attr_load_first_const
@@ -497,7 +513,7 @@ fn get_odd_attr_load_first_constant(padded_trace_length: usize, disclosures: &Ve
             }
         }
 
-        trace_position += disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN + 2*HASH_CYCLE_LEN;
+        trace_position += disclosure.num_of_attributes / 2 * HASH_CYCLE_LEN + CRED_TAIL_CYCLES*HASH_CYCLE_LEN;
     }
 
     return odd_attr_load_first_const
