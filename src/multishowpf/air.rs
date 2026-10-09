@@ -573,40 +573,63 @@ impl Air for ThinDilMulShowAir {
                 let mut t_eval = [E::ZERO; 4];
                 let mut a_eval = [[E::ZERO; 4]; 4];
 
-                let mut cache = self.cache.borrow_mut();
-                if cache.len() > 0 {
-                    let mut reader = SliceReader::new(&cache);
+                // The cache is shared state on a &self method, and winterfell evaluates
+                // constraints from several rayon threads at once, so the borrow has to be
+                // fallible: a thread that finds the cache busy recomputes the values rather than
+                // panicking. Both paths yield the same numbers -- they are a pure function of
+                // random_elements[0] and the public key.
+                let compute = || {
+                    let mut t = [E::ZERO; 4];
+                    let mut a = [[E::ZERO; 4]; 4];
                     for j in 0..4 {
-                    if let Ok(v) = E::read_from(&mut reader) {
-                        t_eval[j] = v;
-                    } else {
-                        panic!("recover from cache failed");
+                        let pubt: [E; N] = self.issuer.t[j].map(E::from);
+                        t[j] = poly_eval(&pubt, random_elements[0]);
                     }
-                }
-
                     for j in 0..4 {
                         for i in 0..4 {
-                            if let Ok(v) = E::read_from(&mut reader) {
-                                a_eval[i][j] = v;
-                            } else {
-                                panic!("recover from cache failed");
+                            let puba: [E; N] = self.issuer.a[i][j].map(E::from);
+                            a[i][j] = poly_eval(&puba, random_elements[0]);
+                        }
+                    }
+                    (t, a)
+                };
+
+                match self.cache.try_borrow_mut() {
+                    Ok(mut cache) => {
+                        if cache.len() > 0 {
+                            let mut reader = SliceReader::new(&cache);
+                            for j in 0..4 {
+                                if let Ok(v) = E::read_from(&mut reader) {
+                                    t_eval[j] = v;
+                                } else {
+                                    panic!("recover from cache failed");
+                                }
+                            }
+
+                            for j in 0..4 {
+                                for i in 0..4 {
+                                    if let Ok(v) = E::read_from(&mut reader) {
+                                        a_eval[i][j] = v;
+                                    } else {
+                                        panic!("recover from cache failed");
+                                    }
+                                }
+                            }
+                        } else {
+                            (t_eval, a_eval) = compute();
+                            // written in the order the reader above expects
+                            for j in 0..4 {
+                                t_eval[j].write_into(&mut *cache);
+                            }
+                            for j in 0..4 {
+                                for i in 0..4 {
+                                    a_eval[i][j].write_into(&mut *cache);
+                                }
                             }
                         }
                     }
-                } else {
-                    let mut pubt: [[E; N]; 4] = [[E::ZERO; N]; 4];
-                    for j in 0..4 {
-                        pubt[j] = self.issuer.t[j].map(E::from);
-                        t_eval[j] = poly_eval(&pubt[j], random_elements[0]);
-                        t_eval[j].write_into(&mut *cache);
-                    }
-                    let mut puba: [[[E; N]; 4]; 4] = [[[E::ZERO; N]; 4]; 4];
-                    for j in 0..4 {
-                        for i in 0..4 {
-                            puba[i][j] = self.issuer.a[i][j].map(E::from);
-                            a_eval[i][j] = poly_eval(&puba[i][j], random_elements[0]);
-                            a_eval[i][j].write_into(&mut *cache);
-                        }
+                    Err(_) => {
+                        (t_eval, a_eval) = compute();
                     }
                 }
 
